@@ -5,6 +5,8 @@ Using SQLite for the PoC (zero-install, file-based).
 Swap DATABASE_URL to a PostgreSQL DSN in .env when moving to production.
 """
 import os
+from dotenv import load_dotenv
+load_dotenv()
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker, declarative_base
 

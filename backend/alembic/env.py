@@ -1,4 +1,6 @@
 from logging.config import fileConfig
+from dotenv import load_dotenv
+load_dotenv()
 
 from sqlalchemy import engine_from_config
 from sqlalchemy import pool
@@ -78,3 +80,6 @@ if context.is_offline_mode():
     run_migrations_offline()
 else:
     run_migrations_online()
+
+from dotenv import load_dotenv
+load_dotenv()
