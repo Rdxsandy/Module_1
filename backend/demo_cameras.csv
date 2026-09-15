@@ -1,0 +1,14 @@
+name,department,camera_type,owner,latitude,longitude,status,stream_url,description
+BULK-001,Traffic,ANPR,Delhi Traffic Police,28.6260,77.2210,ONLINE,rtsp://10.0.0.1/stream1,Connaught Place Inner Circle
+BULK-002,Traffic,Fixed,Delhi Traffic Police,28.6270,77.2220,ONLINE,,Connaught Place Outer Circle
+BULK-003,Police,PTZ,Delhi Police,28.6280,77.2230,MAINTENANCE,,Parliament Street
+BULK-004,Municipal,Fixed,NDMC,28.6290,77.2240,OFFLINE,,India Gate Hexagon
+BULK-005,Traffic,ANPR,Delhi Traffic Police,28.6300,77.2250,ONLINE,,Ashoka Road Intersection
+BULK-BAD,Traffic,ANPR,Delhi Traffic Police,999.999,77.2250,ONLINE,,Bad Coordinates Demo
+BULK-001,Traffic,ANPR,Delhi Traffic Police,28.6310,77.2260,ONLINE,,Duplicate Name Demo
+BULK-006,Police,Fixed,Delhi Police,28.6320,77.2270,ONLINE,,Janpath
+BULK-007,Municipal,PTZ,NDMC,28.6330,77.2280,ONLINE,,Khan Market
+BULK-008,Traffic,ANPR,Delhi Traffic Police,28.6340,77.2290,ONLINE,,Lodhi Road
+BULK-BAD2,Traffic,ANPR,Delhi Traffic Police,28.6350,77.2300,BROKEN,,Bad Status Demo
+BULK-009,Police,Fixed,Delhi Police,28.6360,77.2310,ONLINE,,Safdarjung Tomb
+BULK-010,Traffic,PTZ,Delhi Traffic Police,28.6370,77.2320,ONLINE,,AIIMS Flyover

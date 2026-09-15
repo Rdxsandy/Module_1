@@ -1,0 +1,64 @@
+"""
+routers/watchlist.py - Watchlist management endpoints.
+
+GET    /api/watchlist       - AUTHENTICATED
+POST   /api/watchlist       - ADMIN ONLY
+DELETE /api/watchlist/{id}  - ADMIN ONLY
+"""
+from fastapi import APIRouter, Depends, HTTPException
+from sqlalchemy.orm import Session
+
+from app.database import get_db
+from app.models.watchlist import Watchlist
+from app.schemas.watchlist import WatchlistCreate, WatchlistOut
+from app.services.watchlist_service import normalize_vehicle_number
+from app.auth.dependencies import get_current_user, require_admin
+from app.models.user import User
+
+router = APIRouter(prefix="/api/watchlist", tags=["watchlist"])
+
+
+@router.get("", response_model=list[WatchlistOut])
+def list_watchlist(
+    db: Session = Depends(get_db),
+    _: User = Depends(get_current_user),
+):
+    """List all watchlist entries. Requires login."""
+    return db.query(Watchlist).order_by(Watchlist.id).all()
+
+
+@router.post("", response_model=WatchlistOut, status_code=201)
+def add_to_watchlist(
+    payload: WatchlistCreate,
+    db: Session = Depends(get_db),
+    _: User = Depends(require_admin),   # ADMIN ONLY
+):
+    """Add to watchlist. ADMIN only."""
+    normalised = normalize_vehicle_number(payload.vehicle_number)
+    existing = db.query(Watchlist).filter(Watchlist.vehicle_number == normalised).first()
+    if existing:
+        existing.active = True
+        existing.priority = payload.priority
+        existing.description = payload.description
+        db.commit()
+        db.refresh(existing)
+        return existing
+    entry = Watchlist(**{**payload.model_dump(), "vehicle_number": normalised})
+    db.add(entry)
+    db.commit()
+    db.refresh(entry)
+    return entry
+
+
+@router.delete("/{entry_id}", status_code=204)
+def remove_from_watchlist(
+    entry_id: int,
+    db: Session = Depends(get_db),
+    _: User = Depends(require_admin),   # ADMIN ONLY
+):
+    """Soft-delete from watchlist. ADMIN only."""
+    entry = db.query(Watchlist).filter(Watchlist.id == entry_id).first()
+    if not entry:
+        raise HTTPException(status_code=404, detail="Watchlist entry not found")
+    entry.active = False
+    db.commit()
