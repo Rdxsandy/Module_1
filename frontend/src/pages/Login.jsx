@@ -82,8 +82,8 @@ export default function Login() {
 
         {/* Demo hint */}
         <div style={{ marginTop: 20, padding: '10px 14px', background: '#f0f9ff', borderRadius: 8, fontSize: 12, color: '#0369a1' }}>
-          <strong>Demo credentials (password: 12345678)</strong><br />
-          Admin: <code>admin</code> &nbsp;|&nbsp; Operator: <code>operator</code>
+          <strong>Demo credentials</strong><br />
+          Admin: <code>admin / Admin@123</code> &nbsp;|&nbsp; Operator: <code>operator / Operator@123</code>
         </div>
       </div>
     </div>

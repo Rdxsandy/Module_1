@@ -69,7 +69,7 @@ UI runs at **http://localhost:5173**
 
 | Method | Path | Description |
 |---|---|---|
-| POST | `/api/auth/login` | Get JWT token (Demo user: `admin`/`12345678`) |
+| POST | `/api/auth/login` | Get JWT token (Demo: `admin`/`Admin@123` or `operator`/`Operator@123`) |
 | GET | `/api/cameras` | List cameras (filters: dept, status, type, search) |
 | POST | `/api/cameras` | Onboard a new camera (ADMIN only) |
 | POST | `/api/cameras/bulk-upload` | Upload a CSV file of cameras (ADMIN only) |
@@ -85,7 +85,7 @@ UI runs at **http://localhost:5173**
 
 ## Demo Flow (Evaluator Script)
 
-1. **Login** — Sign in as `admin` (password: `12345678`)
+1. **Login** — Sign in as `admin` (password: `Admin@123`)
 2. **Dashboard** — see 12 cameras, stats, recent alerts
 3. **Cameras** — full registry table, filter by department
 4. **Bulk Upload** — click "Bulk Upload", download template, select `demo_cameras.csv` and import it. See live errors for bad rows.

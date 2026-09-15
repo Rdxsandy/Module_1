@@ -5,7 +5,7 @@ Run from the backend/ directory:
     python seed.py
 
 Creates:
-  - 2 demo users (ADMIN + OPERATOR), password: 12345678
+  - 2 demo users (ADMIN: admin/Admin@123, OPERATOR: operator/Operator@123)
   - 12 cameras across Delhi (Traffic, Police, Municipal departments)
   - 1 active watchlist entry for DL01AB1234 (high-priority stolen vehicle)
   - 12 vehicle events via MockEventSource (triggers alerts automatically)
@@ -33,8 +33,8 @@ from app.auth.security import hash_password
 # ---------------------------------------------------------------------------
 
 USERS = [
-    {"username": "admin",    "password": "12345678", "role": "ADMIN"},
-    {"username": "operator", "password": "12345678", "role": "OPERATOR"},
+    {"username": "admin",    "password": "Admin@123", "role": "ADMIN"},
+    {"username": "operator", "password": "Operator@123", "role": "OPERATOR"},
 ]
 
 # ---------------------------------------------------------------------------
@@ -82,9 +82,9 @@ def seed():
                     is_active=True,
                 ))
             db.commit()
-            print(f"  [OK] Seeded {len(USERS)} users (password: 12345678)")
+            print(f"  [OK] Seeded {len(USERS)} users")
             for u in USERS:
-                print(f"       {u['role']:9s} -> {u['username']} / 12345678")
+                print(f"       {u['role']:9s} -> {u['username']} / {u['password']}")
         else:
             print(f"  [--] Users already present ({existing_users}), skipping")
 
