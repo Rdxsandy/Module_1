@@ -1,6 +1,6 @@
-# CCTV GIS PoC — Centralised CCTV Registry & GIS Mapping
+# CCTV Centralised Intelligence Platform
 
-A full-stack Proof-of-Concept demonstrating a central camera registry, real-time vehicle tracking, GIS mapping and watchlist-based alerting — **without requiring any real CCTV hardware**.
+A full-stack Proof-of-Concept demonstrating a central camera registry, real-time vehicle tracking, GIS mapping, and watchlist-based alerting — **without requiring any real CCTV hardware**. It features simulated AI Event Ingestion, Role-Based Access Control (RBAC), and Audit Logs.
 
 ## Stack
 
@@ -28,7 +28,7 @@ venv\Scripts\activate
 # Install dependencies
 pip install -r requirements.txt
 
-# Seed the database (12 cameras, watchlist, 12 demo events)
+# Seed the database (12 cameras, watchlist, 12 demo events, and Audit Logs)
 python seed.py
 
 # Start API server
@@ -61,7 +61,8 @@ UI runs at **http://localhost:5173**
 | Camera Registry | `/cameras` | List, search, filter, add cameras |
 | GIS Map | `/map` | All cameras on map, vehicle route overlay |
 | Vehicle Tracking | `/tracking` | Search plate → history + route + watchlist badge |
-| Alerts | `/alerts` | All alerts, acknowledge, filter |
+| Alerts | `/alerts` | All alerts, acknowledge, resolve, filter |
+| Watchlist | `/watchlist` | Add, remove, and view watchlist items (ADMIN only for write) |
 
 ---
 
@@ -77,7 +78,8 @@ UI runs at **http://localhost:5173**
 | GET | `/api/events` | Search events (vehicle_number, camera_id, time range) |
 | GET | `/api/vehicles/{plate}/history` | Ordered movement history with camera names |
 | GET | `/api/alerts` | List alerts (filter by status, vehicle) |
-| PATCH | `/api/alerts/{id}/acknowledge` | Acknowledge alert |
+| POST | `/api/alerts/{id}/acknowledge` | Acknowledge alert |
+| POST | `/api/alerts/{id}/resolve` | Resolve alert |
 | GET | `/api/watchlist` | List watchlist |
 | POST | `/api/watchlist` | Add to watchlist (ADMIN only) |
 
@@ -85,14 +87,15 @@ UI runs at **http://localhost:5173**
 
 ## Demo Flow (Evaluator Script)
 
-1. **Login** — Sign in as `admin` (password: `Admin@123`)
-2. **Dashboard** — see 12 cameras, stats, recent alerts
-3. **Cameras** — full registry table, filter by department
-4. **Bulk Upload** — click "Bulk Upload", download template, select `demo_cameras.csv` and import it. See live errors for bad rows.
-5. **GIS Map** — 12+ markers on Delhi map with popup details
-6. **Vehicle Tracking** — enter `DL01AB1234` → 12-stop history + route on map, watchlist badge
-7. **Send Event** — click "Send Demo Event" on tracking page → live alert created
-8. **Alerts** — alert appears with severity, vehicle, camera, reason
+1. **Login** — Sign in as `admin` (password: `Admin@123`) or `operator` (password: `Operator@123`).
+2. **Dashboard** — see 12 cameras, stats, recent alerts.
+3. **Cameras** — full registry table, filter by department.
+4. **Bulk Upload** — click "Bulk Upload", download template, select CSV and import it. See live errors for bad rows. This will generate an **Audit Log**.
+5. **GIS Map** — 12+ markers on Delhi map with popup details.
+6. **Watchlist** — View the watchlist. Admins can add new `VEHICLE` or `PERSON` entries with priority.
+7. **Vehicle Tracking** — enter `DL01AB1234` → 12-stop history + route on map, watchlist badge.
+8. **Send Event** — click "Send Demo Event" on tracking page → simulated AI triggers a live alert.
+9. **Alerts** — alert appears with severity, vehicle, camera, reason. Click **Acknowledge**, then **Resolve**.
 
 ---
 
@@ -101,12 +104,12 @@ UI runs at **http://localhost:5173**
 ```
 React (UI)
    │  REST/JSON
-FastAPI (API + Business Logic)
+FastAPI (API + Business Logic + Audit Logs)
    │  SQLAlchemy
 SQLite (← swap to PostgreSQL via DATABASE_URL env var)
 
 EventSource interface (event_sources/base.py)
-   ├── MockEventSource  ← used now
+   ├── MockEventSource  ← used now (Simulates Deterministic AI Events)
    └── FutureRTSPEventSource  ← real feeds slot in here
 ```
 
