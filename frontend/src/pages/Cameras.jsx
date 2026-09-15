@@ -3,8 +3,8 @@ import { useNavigate } from 'react-router-dom'
 import { getCameras, createCamera, bulkUploadCameras, downloadTemplateUrl } from '../api/client'
 import { useAuth } from '../context/AuthContext'
 
-const STATUS_OPTS = ['', 'online', 'offline', 'maintenance']
-const TYPE_OPTS   = ['', 'ANPR', 'Fixed', 'PTZ']
+const STATUS_OPTS = ['', 'ONLINE', 'OFFLINE', 'MAINTENANCE']
+const TYPE_OPTS   = ['', 'ANPR', 'Fixed', 'PTZ', 'Dome']
 
 export default function Cameras() {
   const [cameras, setCameras] = useState([])
@@ -16,7 +16,7 @@ export default function Cameras() {
   
   // Single Camera Add
   const [showForm, setShowForm] = useState(false)
-  const [form, setForm] = useState({ name:'', department:'Traffic', camera_type:'ANPR', owner:'', latitude:'', longitude:'', status:'online' })
+  const [form, setForm] = useState({ name:'', department:'Traffic', camera_type:'ANPR', owner:'', latitude:'', longitude:'', status:'ONLINE' })
   const [saving, setSaving] = useState(false)
   
   // Bulk Upload
@@ -53,7 +53,14 @@ export default function Cameras() {
       setShowForm(false)
       load()
     } catch (err) {
-      alert(err.response?.data?.detail || 'Failed to create camera')
+      const detail = err.response?.data?.detail
+      if (Array.isArray(detail)) {
+        // Pydantic validation errors — each item has loc + msg
+        const msgs = detail.map(d => `${d.loc?.slice(1).join('.')||'field'}: ${d.msg}`).join('\n')
+        alert('Validation error:\n' + msgs)
+      } else {
+        alert(detail || 'Failed to create camera')
+      }
     } finally {
       setSaving(false)
     }
@@ -189,7 +196,14 @@ export default function Cameras() {
             <label style={lbl}>Department <input required style={inp} value={form.department} onChange={e=>setForm({...form, department:e.target.value})} /></label>
             <label style={lbl}>Type 
               <select required style={inp} value={form.camera_type} onChange={e=>setForm({...form, camera_type:e.target.value})}>
-                <option>ANPR</option><option>Fixed</option><option>PTZ</option>
+                <option>ANPR</option><option>Fixed</option><option>PTZ</option><option>Dome</option>
+              </select>
+            </label>
+            <label style={lbl}>Status
+              <select required style={inp} value={form.status} onChange={e=>setForm({...form, status:e.target.value})}>
+                <option value="ONLINE">ONLINE</option>
+                <option value="OFFLINE">OFFLINE</option>
+                <option value="MAINTENANCE">MAINTENANCE</option>
               </select>
             </label>
             <label style={lbl}>Owner <input style={inp} value={form.owner} onChange={e=>setForm({...form, owner:e.target.value})} /></label>
