@@ -14,6 +14,7 @@ from app.schemas.watchlist import WatchlistCreate, WatchlistOut
 from app.services.watchlist_service import normalize_vehicle_number
 from app.auth.dependencies import get_current_user, require_admin
 from app.models.user import User
+from app.services.audit_service import log_audit
 
 router = APIRouter(prefix="/api/watchlist", tags=["watchlist"])
 
@@ -31,22 +32,25 @@ def list_watchlist(
 def add_to_watchlist(
     payload: WatchlistCreate,
     db: Session = Depends(get_db),
-    _: User = Depends(require_admin),   # ADMIN ONLY
+    user: User = Depends(require_admin),   # ADMIN ONLY
 ):
     """Add to watchlist. ADMIN only."""
-    normalised = normalize_vehicle_number(payload.vehicle_number)
-    existing = db.query(Watchlist).filter(Watchlist.vehicle_number == normalised).first()
+    normalised = normalize_vehicle_number(payload.identifier)
+    existing = db.query(Watchlist).filter(Watchlist.identifier == normalised).first()
     if existing:
-        existing.active = True
+        existing.active = payload.active
         existing.priority = payload.priority
         existing.description = payload.description
+        existing.metadata_json = payload.metadata_json
         db.commit()
         db.refresh(existing)
+        log_audit(db, user, "UPDATE", "WATCHLIST", normalised, payload.model_dump())
         return existing
-    entry = Watchlist(**{**payload.model_dump(), "vehicle_number": normalised})
+    entry = Watchlist(**{**payload.model_dump(), "identifier": normalised})
     db.add(entry)
     db.commit()
     db.refresh(entry)
+    log_audit(db, user, "CREATE", "WATCHLIST", normalised, payload.model_dump())
     return entry
 
 
@@ -54,7 +58,7 @@ def add_to_watchlist(
 def remove_from_watchlist(
     entry_id: int,
     db: Session = Depends(get_db),
-    _: User = Depends(require_admin),   # ADMIN ONLY
+    user: User = Depends(require_admin),   # ADMIN ONLY
 ):
     """Soft-delete from watchlist. ADMIN only."""
     entry = db.query(Watchlist).filter(Watchlist.id == entry_id).first()
@@ -62,3 +66,4 @@ def remove_from_watchlist(
         raise HTTPException(status_code=404, detail="Watchlist entry not found")
     entry.active = False
     db.commit()
+    log_audit(db, user, "DELETE", "WATCHLIST", entry.identifier, None)

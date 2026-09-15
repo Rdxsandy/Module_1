@@ -11,13 +11,19 @@ class CameraCreate(BaseModel):
     owner: Optional[str] = None
     latitude: float = Field(..., ge=-90, le=90)
     longitude: float = Field(..., ge=-180, le=180)
-    status: str = Field(default="online", pattern="^(online|offline|maintenance)$")
+    status: str = Field(default="ONLINE", pattern="^(ONLINE|OFFLINE|MAINTENANCE)$")
     stream_url: Optional[str] = None
+    vms_type: Optional[str] = None
+    vendor: Optional[str] = None
+    storage_type: Optional[str] = None
+    retention_days: Optional[int] = None
+    description: Optional[str] = None
 
 
 class CameraOut(CameraCreate):
     id: int
     created_at: datetime
     updated_at: datetime
+    last_seen_at: Optional[datetime] = None
 
     model_config = {"from_attributes": True}

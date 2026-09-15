@@ -33,14 +33,14 @@ def process_event(
     Raises ValueError if camera_id does not exist.
     """
     # --- 1. Validate camera ---
-    camera = db.query(Camera).filter(Camera.id == payload.camera_id).first()
+    camera = db.query(Camera).filter(Camera.name == payload.camera_id).first()
     if not camera:
-        raise ValueError(f"Camera {payload.camera_id} not found")
+        raise ValueError(f"Camera name '{payload.camera_id}' not found")
 
     # --- 2. Normalise and insert event ---
     normalised_plate = normalize_vehicle_number(payload.vehicle_number)
     event = VehicleEvent(
-        camera_id=payload.camera_id,
+        camera_id=camera.id,
         vehicle_number=normalised_plate,
         event_time=payload.event_time,
         latitude=payload.latitude,

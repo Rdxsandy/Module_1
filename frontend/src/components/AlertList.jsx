@@ -59,6 +59,11 @@ export default function AlertList({ alerts = [], onRefresh, compact = false }) {
                   {a.status === 'NEW' && (
                     <button onClick={() => handleAck(a.id)} style={ackBtn}>Acknowledge</button>
                   )}
+                  {a.status === 'ACKNOWLEDGED' && (
+                    <button onClick={async () => {
+                      import('../api/client').then(m => m.resolveAlert(a.id).then(() => onRefresh?.()))
+                    }} style={{...ackBtn, background: '#0e9f6e'}}>Resolve</button>
+                  )}
                 </td>
               )}
             </tr>

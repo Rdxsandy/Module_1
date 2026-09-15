@@ -4,14 +4,18 @@ from typing import Optional
 from pydantic import BaseModel, Field
 
 
+from typing import Optional, Dict, Any
+
 class EventCreate(BaseModel):
-    camera_id: int
+    camera_id: str = Field(..., examples=["CAM-001"])
     vehicle_number: str = Field(..., min_length=1, max_length=50, examples=["DL01AB1234"])
     event_time: datetime
     latitude: float = Field(..., ge=-90, le=90)
     longitude: float = Field(..., ge=-180, le=180)
     confidence: Optional[float] = Field(default=1.0, ge=0.0, le=1.0)
     event_type: str = Field(default="ANPR", examples=["ANPR"])
+    attributes: Optional[Dict[str, Any]] = None
+    source: Optional[Dict[str, Any]] = None
 
 
 class EventOut(BaseModel):

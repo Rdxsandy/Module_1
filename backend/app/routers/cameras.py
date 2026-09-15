@@ -13,20 +13,22 @@ from app.models.camera import Camera
 from app.schemas.camera import CameraCreate, CameraOut
 from app.auth.dependencies import get_current_user, require_admin
 from app.models.user import User
+from app.services.audit_service import log_audit
 
 router = APIRouter(prefix="/api/cameras", tags=["cameras"])
 
 # Required fixed headers from spec
 REQUIRED_HEADERS = [
     "name", "department", "camera_type", "owner", 
-    "latitude", "longitude", "status", "stream_url", "description"
+    "latitude", "longitude", "status", "stream_url",
+    "vms_type", "vendor", "storage_type", "retention_days", "description"
 ]
 
 @router.get("/bulk-upload/template")
 def download_template(_: User = Depends(get_current_user)):
     """Download the fixed CSV template for bulk upload."""
     content = ",".join(REQUIRED_HEADERS) + "\n"
-    content += "CAM-001,Traffic,ANPR,Traffic Dept,28.6139,77.2090,ONLINE,,Main Road\n"
+    content += "CAM-001,Traffic,ANPR,Traffic Dept,28.6139,77.2090,ONLINE,,,,,,Main Road\n"
     return Response(
         content=content,
         media_type="text/csv",
@@ -37,7 +39,7 @@ def download_template(_: User = Depends(get_current_user)):
 async def bulk_upload_cameras(
     file: UploadFile = File(...),
     db: Session = Depends(get_db),
-    _: User = Depends(require_admin),
+    user: User = Depends(require_admin),
 ):
     """
     Parse, validate and bulk insert cameras from CSV. ADMIN only.
@@ -120,6 +122,16 @@ async def bulk_upload_cameras(
                 raise ValueError("Status must be ONLINE, OFFLINE, or MAINTENANCE")
                 
             stream_url = row.get("stream_url", "").strip() or None
+            vms_type = row.get("vms_type", "").strip() or None
+            vendor = row.get("vendor", "").strip() or None
+            storage_type = row.get("storage_type", "").strip() or None
+            
+            try:
+                rd_str = row.get("retention_days", "").strip()
+                retention_days = int(rd_str) if rd_str else None
+            except:
+                raise ValueError("Invalid retention_days")
+
             description = row.get("description", "").strip() or None
             
             cam = Camera(
@@ -129,8 +141,12 @@ async def bulk_upload_cameras(
                 owner=owner,
                 latitude=lat,
                 longitude=lng,
-                status=status,
+                status=status.upper(),
                 stream_url=stream_url,
+                vms_type=vms_type,
+                vendor=vendor,
+                storage_type=storage_type,
+                retention_days=retention_days,
                 description=description
             )
             cameras_to_add.append(cam)
@@ -144,6 +160,7 @@ async def bulk_upload_cameras(
         db.add_all(cameras_to_add)
         db.commit()
         imported = len(cameras_to_add)
+        log_audit(db, user, "BULK_IMPORT", "CAMERA", None, {"imported": imported, "failed": failed})
         
     return {
         "total": total,
@@ -178,13 +195,14 @@ def list_cameras(
 def create_camera(
     payload: CameraCreate,
     db: Session = Depends(get_db),
-    _: User = Depends(require_admin),
+    user: User = Depends(require_admin),
 ):
     """Onboard a new camera. ADMIN only."""
     camera = Camera(**payload.model_dump())
     db.add(camera)
     db.commit()
     db.refresh(camera)
+    log_audit(db, user, "CREATE", "CAMERA", camera.name, payload.model_dump())
     return camera
 
 @router.get("/{camera_id}", response_model=CameraOut)

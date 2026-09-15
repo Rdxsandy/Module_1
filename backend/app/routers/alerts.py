@@ -14,6 +14,7 @@ from app.models.alert import Alert
 from app.schemas.alert import AlertOut
 from app.auth.dependencies import get_current_user
 from app.models.user import User
+from app.services.audit_service import log_audit
 
 router = APIRouter(prefix="/api/alerts", tags=["alerts"])
 
@@ -36,11 +37,22 @@ def list_alerts(
     return q.order_by(Alert.created_at.desc()).limit(limit).all()
 
 
-@router.patch("/{alert_id}/acknowledge", response_model=AlertOut)
-def acknowledge_alert(
+@router.get("/{alert_id}", response_model=AlertOut)
+def get_alert(
     alert_id: int,
     db: Session = Depends(get_db),
     _: User = Depends(get_current_user),
+):
+    alert = db.query(Alert).filter(Alert.id == alert_id).first()
+    if not alert:
+        raise HTTPException(status_code=404, detail="Alert not found")
+    return alert
+
+@router.post("/{alert_id}/acknowledge", response_model=AlertOut)
+def acknowledge_alert(
+    alert_id: int,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
 ):
     """Acknowledge an alert. Requires login."""
     alert = db.query(Alert).filter(Alert.id == alert_id).first()
@@ -50,4 +62,21 @@ def acknowledge_alert(
     alert.acknowledged_at = datetime.now(timezone.utc)
     db.commit()
     db.refresh(alert)
+    log_audit(db, user, "ACKNOWLEDGE", "ALERT", str(alert_id), None)
+    return alert
+
+@router.post("/{alert_id}/resolve", response_model=AlertOut)
+def resolve_alert(
+    alert_id: int,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    """Resolve an alert. Requires login."""
+    alert = db.query(Alert).filter(Alert.id == alert_id).first()
+    if not alert:
+        raise HTTPException(status_code=404, detail="Alert not found")
+    alert.status = "RESOLVED"
+    db.commit()
+    db.refresh(alert)
+    log_audit(db, user, "RESOLVE", "ALERT", str(alert_id), None)
     return alert

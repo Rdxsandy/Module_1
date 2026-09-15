@@ -21,6 +21,6 @@ def match_watchlist(db: Session, raw_vehicle_number: str) -> Watchlist | None:
     normalised = normalize_vehicle_number(raw_vehicle_number)
     return (
         db.query(Watchlist)
-        .filter(Watchlist.vehicle_number == normalised, Watchlist.active.is_(True))
+        .filter(Watchlist.identifier == normalised, Watchlist.active.is_(True))
         .first()
     )

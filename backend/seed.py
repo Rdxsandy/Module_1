@@ -42,26 +42,26 @@ USERS = [
 # ---------------------------------------------------------------------------
 
 CAMERAS = [
-    {"name": "Camera-01", "department": "Traffic",   "camera_type": "ANPR",  "owner": "Delhi Traffic Police", "latitude": 28.6139, "longitude": 77.2090, "status": "online"},
-    {"name": "Camera-02", "department": "Traffic",   "camera_type": "ANPR",  "owner": "Delhi Traffic Police", "latitude": 28.6155, "longitude": 77.2100, "status": "online"},
-    {"name": "Camera-03", "department": "Traffic",   "camera_type": "Fixed", "owner": "Delhi Traffic Police", "latitude": 28.6170, "longitude": 77.2110, "status": "online"},
-    {"name": "Camera-04", "department": "Police",    "camera_type": "PTZ",   "owner": "Delhi Police",         "latitude": 28.6180, "longitude": 77.2120, "status": "online"},
-    {"name": "Camera-05", "department": "Police",    "camera_type": "ANPR",  "owner": "Delhi Police",         "latitude": 28.6185, "longitude": 77.2130, "status": "online"},
-    {"name": "Camera-06", "department": "Municipal", "camera_type": "Fixed", "owner": "NDMC",                 "latitude": 28.6190, "longitude": 77.2140, "status": "maintenance"},
-    {"name": "Camera-07", "department": "Traffic",   "camera_type": "ANPR",  "owner": "Delhi Traffic Police", "latitude": 28.6200, "longitude": 77.2150, "status": "online"},
-    {"name": "Camera-08", "department": "Police",    "camera_type": "PTZ",   "owner": "Delhi Police",         "latitude": 28.6210, "longitude": 77.2160, "status": "online"},
-    {"name": "Camera-09", "department": "Traffic",   "camera_type": "ANPR",  "owner": "Delhi Traffic Police", "latitude": 28.6220, "longitude": 77.2170, "status": "online"},
-    {"name": "Camera-10", "department": "Municipal", "camera_type": "Fixed", "owner": "NDMC",                 "latitude": 28.6230, "longitude": 77.2180, "status": "offline"},
-    {"name": "Camera-11", "department": "Police",    "camera_type": "ANPR",  "owner": "Delhi Police",         "latitude": 28.6240, "longitude": 77.2190, "status": "online"},
-    {"name": "Camera-12", "department": "Traffic",   "camera_type": "ANPR",  "owner": "Delhi Traffic Police", "latitude": 28.6250, "longitude": 77.2200, "status": "online"},
+    {"name": "Camera-01", "department": "Traffic",   "camera_type": "ANPR",  "owner": "Delhi Traffic Police", "latitude": 28.6139, "longitude": 77.2090, "status": "ONLINE"},
+    {"name": "Camera-02", "department": "Traffic",   "camera_type": "ANPR",  "owner": "Delhi Traffic Police", "latitude": 28.6155, "longitude": 77.2100, "status": "ONLINE"},
+    {"name": "Camera-03", "department": "Traffic",   "camera_type": "Fixed", "owner": "Delhi Traffic Police", "latitude": 28.6170, "longitude": 77.2110, "status": "ONLINE"},
+    {"name": "Camera-04", "department": "Police",    "camera_type": "PTZ",   "owner": "Delhi Police",         "latitude": 28.6180, "longitude": 77.2120, "status": "ONLINE"},
+    {"name": "Camera-05", "department": "Police",    "camera_type": "ANPR",  "owner": "Delhi Police",         "latitude": 28.6185, "longitude": 77.2130, "status": "ONLINE"},
+    {"name": "Camera-06", "department": "Municipal", "camera_type": "Fixed", "owner": "NDMC",                 "latitude": 28.6190, "longitude": 77.2140, "status": "MAINTENANCE"},
+    {"name": "Camera-07", "department": "Traffic",   "camera_type": "ANPR",  "owner": "Delhi Traffic Police", "latitude": 28.6200, "longitude": 77.2150, "status": "ONLINE"},
+    {"name": "Camera-08", "department": "Police",    "camera_type": "PTZ",   "owner": "Delhi Police",         "latitude": 28.6210, "longitude": 77.2160, "status": "ONLINE"},
+    {"name": "Camera-09", "department": "Traffic",   "camera_type": "ANPR",  "owner": "Delhi Traffic Police", "latitude": 28.6220, "longitude": 77.2170, "status": "ONLINE"},
+    {"name": "Camera-10", "department": "Municipal", "camera_type": "Fixed", "owner": "NDMC",                 "latitude": 28.6230, "longitude": 77.2180, "status": "OFFLINE"},
+    {"name": "Camera-11", "department": "Police",    "camera_type": "ANPR",  "owner": "Delhi Police",         "latitude": 28.6240, "longitude": 77.2190, "status": "ONLINE"},
+    {"name": "Camera-12", "department": "Traffic",   "camera_type": "ANPR",  "owner": "Delhi Traffic Police", "latitude": 28.6250, "longitude": 77.2200, "status": "ONLINE"},
 ]
 
 WATCHLIST = [
     {
-        "vehicle_number": "DL01AB1234",
-        "entity_type": "stolen_vehicle",
+        "identifier": "DL01AB1234",
+        "entity_type": "VEHICLE",
         "description": "High-priority wanted/stolen vehicle - demo target",
-        "priority": "high",
+        "priority": "HIGH",
         "active": True,
     }
 ]

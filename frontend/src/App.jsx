@@ -19,12 +19,15 @@ import MapPage        from './pages/MapPage'
 import VehicleTracking from './pages/VehicleTracking'
 import Alerts         from './pages/Alerts'
 
+import Watchlist from './pages/Watchlist'
+
 const NAV_LINKS = [
   { to: '/',         label: '🏠 Dashboard'       },
   { to: '/cameras',  label: '📹 Cameras'          },
   { to: '/map',      label: '🗺️  GIS Map'          },
   { to: '/tracking', label: '🚗 Vehicle Tracking'  },
   { to: '/alerts',   label: '🚨 Alerts'            },
+  { to: '/watchlist',label: '📋 Watchlist'         },
 ]
 
 const roleColors = { ADMIN: '#1a56db', OPERATOR: '#0e9f6e' }
@@ -45,23 +48,27 @@ function Sidebar() {
 
       {/* Nav links */}
       <div style={{ padding: '12px 0', flex: 1 }}>
-        {NAV_LINKS.map(({ to, label }) => (
-          <NavLink
-            key={to}
-            to={to}
-            end={to === '/'}
-            style={({ isActive }) => ({
-              display: 'block', padding: '10px 20px', textDecoration: 'none',
-              fontSize: 14, color: isActive ? '#fff' : '#94a3b8',
-              background: isActive ? '#334155' : 'transparent',
-              borderLeft: isActive ? '3px solid #1a56db' : '3px solid transparent',
-              fontWeight: isActive ? 600 : 400,
-              transition: 'all .15s',
-            })}
-          >
-            {label}
-          </NavLink>
-        ))}
+        {NAV_LINKS.map(({ to, label }) => {
+          // Hide watchlist from OPERATOR if we want, but spec says "Operators can view matches and alerts but cannot modify protected watchlist data".
+          // So let them view it.
+          return (
+            <NavLink
+              key={to}
+              to={to}
+              end={to === '/'}
+              style={({ isActive }) => ({
+                display: 'block', padding: '10px 20px', textDecoration: 'none',
+                fontSize: 14, color: isActive ? '#fff' : '#94a3b8',
+                background: isActive ? '#334155' : 'transparent',
+                borderLeft: isActive ? '3px solid #1a56db' : '3px solid transparent',
+                fontWeight: isActive ? 600 : 400,
+                transition: 'all .15s',
+              })}
+            >
+              {label}
+            </NavLink>
+          )
+        })}
       </div>
 
       {/* User info + logout */}
@@ -108,6 +115,7 @@ function AppLayout() {
           <Route path="/map"      element={<ProtectedRoute><MapPage /></ProtectedRoute>}         />
           <Route path="/tracking" element={<ProtectedRoute><VehicleTracking /></ProtectedRoute>} />
           <Route path="/alerts"   element={<ProtectedRoute><Alerts /></ProtectedRoute>}          />
+          <Route path="/watchlist" element={<ProtectedRoute><Watchlist /></ProtectedRoute>}      />
           <Route path="*"         element={<Navigate to="/" replace />}                          />
         </Routes>
       </main>

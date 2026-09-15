@@ -21,7 +21,7 @@ export default function VehicleTracking() {
 
   // Demo event sender
   const [cameras, setCameras] = useState([])
-  const [evForm, setEvForm]   = useState({ camera_id:'7', vehicle_number:'DL01AB1234', latitude:'28.6200', longitude:'77.2150', confidence:'0.96', event_type:'ANPR' })
+  const [evForm, setEvForm]   = useState({ camera_id:'Camera-07', vehicle_number:'DL01AB1234', latitude:'28.6200', longitude:'77.2150', confidence:'0.96', event_type:'ANPR' })
   const [evResult, setEvResult] = useState(null)
   const [showEventPanel, setShowEventPanel] = useState(false)
   const navigate = useNavigate()
@@ -41,7 +41,7 @@ export default function VehicleTracking() {
     e.preventDefault()
     const payload = {
       ...evForm,
-      camera_id: parseInt(evForm.camera_id),
+      camera_id: evForm.camera_id,
       latitude: parseFloat(evForm.latitude),
       longitude: parseFloat(evForm.longitude),
       confidence: parseFloat(evForm.confidence),
