@@ -62,6 +62,15 @@ export const getAlerts        = (params = {}) => api.get('/alerts', { params })
 export const acknowledgeAlert = (id)           => api.post(`/alerts/${id}/acknowledge`)
 export const resolveAlert     = (id)           => api.post(`/alerts/${id}/resolve`)
 
+// ---- Dashboard ----
+export const getDashboardSummary = () => api.get('/dashboard/summary')
+export const getRecentAlerts     = (params = {}) => api.get('/dashboard/recent-alerts', { params })
+
+// ---- Simulator ----
+export const startSimulator = () => api.post('/simulator/start')
+export const stopSimulator  = () => api.post('/simulator/stop')
+export const getSimulatorStatus = () => api.get('/simulator/status')
+
 // ---- Watchlist ----
 export const getWatchlist        = ()     => api.get('/watchlist')
 export const addToWatchlist      = (data) => api.post('/watchlist', data)

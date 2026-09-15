@@ -4,20 +4,26 @@
  */
 import React, { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { getCameras, getAlerts } from '../api/client'
+import { getDashboardSummary, getRecentAlerts, startSimulator, stopSimulator, getSimulatorStatus } from '../api/client'
 import StatsCards from '../components/StatsCards'
 import AlertList from '../components/AlertList'
 
 export default function Dashboard() {
-  const [cameras, setCameras] = useState([])
+  const [summary, setSummary] = useState(null)
   const [alerts, setAlerts] = useState([])
   const [loading, setLoading] = useState(true)
+  const [simulatorRunning, setSimulatorRunning] = useState(false)
 
   const load = async () => {
     try {
-      const [camRes, alertRes] = await Promise.all([getCameras(), getAlerts({ limit: 10 })])
-      setCameras(camRes.data)
+      const [sumRes, alertRes, simRes] = await Promise.all([
+        getDashboardSummary(),
+        getRecentAlerts({ limit: 5 }),
+        getSimulatorStatus().catch(() => ({ data: { running: false } }))
+      ])
+      setSummary(sumRes.data)
       setAlerts(alertRes.data)
+      setSimulatorRunning(simRes.data.running)
     } catch (err) {
       console.error(err)
     } finally {
@@ -27,12 +33,42 @@ export default function Dashboard() {
 
   useEffect(() => { load() }, [])
 
+  const toggleSimulator = async () => {
+    try {
+      if (simulatorRunning) {
+        await stopSimulator();
+      } else {
+        await startSimulator();
+      }
+      setSimulatorRunning(!simulatorRunning);
+    } catch (e) {
+      console.error(e);
+      alert('Failed to toggle simulator');
+    }
+  };
+
   return (
     <div>
-      <h1 style={h1}>🏠 Dashboard</h1>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
+        <h1 style={h1}>🏠 Dashboard</h1>
+        <button 
+          onClick={toggleSimulator}
+          style={{
+            padding: '8px 16px',
+            borderRadius: '6px',
+            border: 'none',
+            background: simulatorRunning ? '#ef4444' : '#10b981',
+            color: 'white',
+            fontWeight: 'bold',
+            cursor: 'pointer'
+          }}
+        >
+          {simulatorRunning ? '⏹ Stop Simulator' : '▶ Start Simulator'}
+        </button>
+      </div>
       {loading ? <p>Loading…</p> : (
         <>
-          <StatsCards cameras={cameras} alerts={alerts} />
+          <StatsCards summary={summary} />
 
           {/* Quick actions */}
           <div style={{ display: 'flex', gap: 12, marginBottom: 24, flexWrap: 'wrap' }}>
@@ -45,7 +81,7 @@ export default function Dashboard() {
           {/* Recent alerts */}
           <div style={card}>
             <h2 style={h2}>Recent Alerts</h2>
-            <AlertList alerts={alerts.slice(0, 5)} onRefresh={load} compact />
+            <AlertList alerts={alerts} onRefresh={load} compact />
           </div>
         </>
       )}

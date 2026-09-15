@@ -59,6 +59,9 @@ app.include_router(events.router)
 app.include_router(vehicles.router)
 app.include_router(alerts.router)
 app.include_router(watchlist.router)
+from app.routers import dashboard, simulator
+app.include_router(dashboard.router)
+app.include_router(simulator.router)
 
 
 # ---------------------------------------------------------------------------

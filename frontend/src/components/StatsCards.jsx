@@ -22,20 +22,17 @@ function Card({ label, value, color, emoji }) {
   )
 }
 
-export default function StatsCards({ cameras = [], alerts = [] }) {
-  const total = cameras.length
-  const online = cameras.filter(c => c.status === 'online').length
-  const offline = cameras.filter(c => c.status === 'offline').length
-  const maint = cameras.filter(c => c.status === 'maintenance').length
-  const openAlerts = alerts.filter(a => a.status === 'NEW').length
+export default function StatsCards({ summary }) {
+  if (!summary) return null;
 
   return (
     <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap', marginBottom: 24 }}>
-      <Card label="Total Cameras"       value={total}      color="#1a56db" emoji="📹" />
-      <Card label="Online"              value={online}     color="#0e9f6e" emoji="🟢" />
-      <Card label="Offline"             value={offline}    color="#e02424" emoji="🔴" />
-      <Card label="Maintenance"         value={maint}      color="#ff8800" emoji="🟡" />
-      <Card label="Open Alerts"         value={openAlerts} color="#9333ea" emoji="🚨" />
+      <Card label="Total Cameras"       value={summary.camera_count}      color="#1a56db" emoji="📹" />
+      <Card label="Online"              value={summary.online_count}     color="#0e9f6e" emoji="🟢" />
+      <Card label="Offline"             value={summary.offline_count}    color="#e02424" emoji="🔴" />
+      <Card label="Maintenance"         value={summary.maintenance_count}      color="#ff8800" emoji="🟡" />
+      <Card label="Events Today"        value={summary.events_today} color="#06b6d4" emoji="🚗" />
+      <Card label="Open Alerts"         value={summary.new_alerts} color="#9333ea" emoji="🚨" />
     </div>
   )
 }

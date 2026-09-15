@@ -19,6 +19,8 @@ A full-stack Proof-of-Concept demonstrating a central camera registry, real-time
 ### 1. Backend
 
 ```bash
+docker compose up -d db
+
 cd backend
 
 # (Windows) create virtualenv
@@ -28,8 +30,11 @@ venv\Scripts\activate
 # Install dependencies
 pip install -r requirements.txt
 
-# Seed the database (12 cameras, watchlist, 12 demo events, and Audit Logs)
-python seed.py
+# Run migrations
+alembic upgrade head
+
+# Seed the database
+python -m app.seed.demo_seed
 
 # Start API server
 uvicorn app.main:app --reload
