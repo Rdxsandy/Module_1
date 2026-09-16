@@ -11,7 +11,7 @@ import L from 'leaflet'
 const statusColors = { online: '#0e9f6e', offline: '#e02424', maintenance: '#ff8800' }
 
 function makeIcon(status) {
-  const color = statusColors[status] || '#1a56db'
+  const color = statusColors[String(status).toLowerCase()] || '#1a56db'
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="28" height="36" viewBox="0 0 28 36">
     <path d="M14 0C6.27 0 0 6.27 0 14c0 10.5 14 22 14 22S28 24.5 28 14C28 6.27 21.73 0 14 0z" fill="${color}"/>
     <circle cx="14" cy="14" r="6" fill="white"/>
@@ -41,7 +41,7 @@ export default function CameraMarker({ camera, onClick }) {
           <div><b>Owner:</b> {camera.owner || '—'}</div>
           <div>
             <b>Status:</b>{' '}
-            <span style={{ color: statusColors[camera.status] || '#666', fontWeight: 600 }}>
+            <span style={{ color: statusColors[String(camera.status).toLowerCase()] || '#666', fontWeight: 600 }}>
               {camera.status}
             </span>
           </div>

@@ -5,10 +5,23 @@
  */
 import React, { useEffect, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
+import { useMap } from 'react-leaflet'
 import MapView from '../components/MapView'
 import CameraMarker from '../components/CameraMarker'
 import VehicleRoute from '../components/VehicleRoute'
 import { getCameras, getVehicleHistory } from '../api/client'
+
+// Fits the viewport to all camera markers so cameras added far outside the
+// default Delhi view (typo'd or otherwise) are still visible on load.
+function FitAllCameras({ cameras }) {
+  const map = useMap()
+  useEffect(() => {
+    if (cameras.length === 0) return
+    const bounds = cameras.map(c => [c.latitude, c.longitude])
+    map.fitBounds(bounds, { padding: [40, 40], maxZoom: 13 })
+  }, [cameras, map])
+  return null
+}
 
 export default function MapPage() {
   const [cameras, setCameras] = useState([])
@@ -67,6 +80,7 @@ export default function MapPage() {
 
       <MapView height="60vh">
         {cameras.map(cam => <CameraMarker key={cam.id} camera={cam} />)}
+        {route.length === 0 && <FitAllCameras cameras={cameras} />}
         {route.length > 0 && <VehicleRoute history={route} fitRoute={fitRoute} />}
       </MapView>
 
