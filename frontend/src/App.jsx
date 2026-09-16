@@ -18,8 +18,8 @@ import Cameras        from './pages/Cameras'
 import MapPage        from './pages/MapPage'
 import VehicleTracking from './pages/VehicleTracking'
 import Alerts         from './pages/Alerts'
-
-import Watchlist from './pages/Watchlist'
+import Watchlist      from './pages/Watchlist'
+import Events          from './pages/Events'
 
 const NAV_LINKS = [
   { to: '/',         label: '🏠 Dashboard'       },
@@ -28,6 +28,7 @@ const NAV_LINKS = [
   { to: '/tracking', label: '🚗 Vehicle Tracking'  },
   { to: '/alerts',   label: '🚨 Alerts'            },
   { to: '/watchlist',label: '📋 Watchlist'         },
+  { to: '/events',   label: '🧾 Raw Events'        },
 ]
 
 const roleColors = { ADMIN: '#1a56db', OPERATOR: '#0e9f6e' }
@@ -115,7 +116,8 @@ function AppLayout() {
           <Route path="/map"      element={<ProtectedRoute><MapPage /></ProtectedRoute>}         />
           <Route path="/tracking" element={<ProtectedRoute><VehicleTracking /></ProtectedRoute>} />
           <Route path="/alerts"   element={<ProtectedRoute><Alerts /></ProtectedRoute>}          />
-          <Route path="/watchlist" element={<ProtectedRoute><Watchlist /></ProtectedRoute>}      />
+          <Route path="/watchlist" element={<ProtectedRoute><Watchlist /></ProtectedRoute>}       />
+          <Route path="/events"   element={<ProtectedRoute><Events /></ProtectedRoute>}          />
           <Route path="*"         element={<Navigate to="/" replace />}                          />
         </Routes>
       </main>
@@ -135,3 +137,4 @@ export default function App() {
     </AuthProvider>
   )
 }
+

@@ -2,6 +2,7 @@ import React, { useEffect, useState, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { getCameras, createCamera, bulkUploadCameras, downloadTemplateUrl } from '../api/client'
 import { useAuth } from '../context/AuthContext'
+import Modal from '../components/Modal'
 
 const STATUS_OPTS = ['', 'ONLINE', 'OFFLINE', 'MAINTENANCE']
 const TYPE_OPTS   = ['', 'ANPR', 'Fixed', 'PTZ', 'Dome']
@@ -25,6 +26,7 @@ export default function Cameras() {
   const [bulkSaving, setBulkSaving] = useState(false)
   const [bulkResult, setBulkResult] = useState(null)
   const fileInputRef = useRef(null)
+  const [modal, setModal] = useState({ open: false, title: '', message: '', variant: 'info' })
 
   const navigate = useNavigate()
   const { user, token } = useAuth()
@@ -46,20 +48,41 @@ export default function Cameras() {
 
   const handleSave = async (e) => {
     e.preventDefault()
+
+    const trimmedName = form.name.trim()
+    const duplicate = cameras.find(c => c.name.toLowerCase() === trimmedName.toLowerCase())
+    if (duplicate) {
+      setModal({
+        open: true,
+        title: 'Camera Name Already Exists',
+        message: `A camera named "${trimmedName}" is already registered. Please choose a different name.`,
+        variant: 'warning',
+      })
+      return
+    }
+
     setSaving(true)
     try {
       await createCamera(form)
       setForm({ name:'', department:'Traffic', camera_type:'ANPR', owner:'', latitude:'', longitude:'', status:'online' })
       setShowForm(false)
       load()
+      setModal({ open: true, title: 'Camera Saved', message: `"${trimmedName}" was added to the registry successfully.`, variant: 'success' })
     } catch (err) {
       const detail = err.response?.data?.detail
-      if (Array.isArray(detail)) {
+      if (err.response?.status === 409) {
+        setModal({
+          open: true,
+          title: 'Camera Name Already Exists',
+          message: detail || `A camera named "${trimmedName}" is already registered.`,
+          variant: 'warning',
+        })
+      } else if (Array.isArray(detail)) {
         // Pydantic validation errors — each item has loc + msg
         const msgs = detail.map(d => `${d.loc?.slice(1).join('.')||'field'}: ${d.msg}`).join('\n')
-        alert('Validation error:\n' + msgs)
+        setModal({ open: true, title: 'Validation Error', message: msgs, variant: 'error' })
       } else {
-        alert(detail || 'Failed to create camera')
+        setModal({ open: true, title: 'Failed to Create Camera', message: detail || 'Please try again.', variant: 'error' })
       }
     } finally {
       setSaving(false)
@@ -78,7 +101,7 @@ export default function Cameras() {
       if (fileInputRef.current) fileInputRef.current.value = ''
       load() // Refresh table
     } catch (err) {
-      alert(err.response?.data?.detail || 'Bulk upload failed')
+      setModal({ open: true, title: 'Bulk Upload Failed', message: err.response?.data?.detail || 'Please try again.', variant: 'error' })
     } finally {
       setBulkSaving(false)
     }
@@ -123,7 +146,7 @@ export default function Cameras() {
                     a.href = url
                     a.download = 'cameras_template.csv'
                     a.click()
-                  } catch (e) { alert("Failed to download template") }
+                  } catch (e) { setModal({ open: true, title: 'Download Failed', message: 'Failed to download template.', variant: 'error' }) }
                 }}
                 style={{...secondaryBtn, fontSize: 13, padding: '6px 12px'}}
               >
@@ -259,6 +282,15 @@ export default function Cameras() {
           </tbody>
         </table>
       </div>
+
+      <Modal
+        open={modal.open}
+        title={modal.title}
+        message={modal.message}
+        variant={modal.variant}
+        autoCloseMs={modal.variant === 'success' ? 2000 : undefined}
+        onClose={() => setModal(m => ({ ...m, open: false }))}
+      />
     </div>
   )
 }

@@ -8,12 +8,14 @@ import { FaHome, FaStop, FaPlay, FaMapMarkedAlt, FaVideo, FaCar, FaExclamationTr
 import { getDashboardSummary, getRecentAlerts, startSimulator, stopSimulator, getSimulatorStatus } from '../api/client'
 import StatsCards from '../components/StatsCards'
 import AlertList from '../components/AlertList'
+import Modal from '../components/Modal'
 
 export default function Dashboard() {
   const [summary, setSummary] = useState(null)
   const [alerts, setAlerts] = useState([])
   const [loading, setLoading] = useState(true)
   const [simulatorRunning, setSimulatorRunning] = useState(false)
+  const [modal, setModal] = useState({ open: false, title: '', message: '', variant: 'info' })
 
   const load = async () => {
     try {
@@ -38,13 +40,17 @@ export default function Dashboard() {
     try {
       if (simulatorRunning) {
         await stopSimulator();
+        setSimulatorRunning(false);
+        setModal({ open: true, title: 'Simulator Stopped', message: 'The traffic simulator was stopped successfully.', variant: 'success' });
       } else {
         await startSimulator();
+        setSimulatorRunning(true);
+        setModal({ open: true, title: 'Simulator Started', message: 'The traffic simulator is now running.', variant: 'success' });
       }
-      setSimulatorRunning(!simulatorRunning);
     } catch (e) {
       console.error(e);
-      alert('Failed to toggle simulator');
+      const detail = e.response?.data?.detail;
+      setModal({ open: true, title: 'Failed to Toggle Simulator', message: detail || 'Please try again.', variant: 'error' });
     }
   };
 
@@ -88,6 +94,15 @@ export default function Dashboard() {
           </div>
         </>
       )}
+
+      <Modal
+        open={modal.open}
+        title={modal.title}
+        message={modal.message}
+        variant={modal.variant}
+        autoCloseMs={modal.variant === 'success' ? 2000 : undefined}
+        onClose={() => setModal(m => ({ ...m, open: false }))}
+      />
     </div>
   )
 }

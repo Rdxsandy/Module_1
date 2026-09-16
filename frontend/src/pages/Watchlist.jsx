@@ -18,6 +18,9 @@ import {
 } from 'react-icons/ri'
 import api from '../api/client'
 import { useAuth } from '../context/AuthContext'
+import Modal from '../components/Modal'
+
+const normalizePlate = (v) => v.toUpperCase().replace(/[^A-Z0-9]/g, '')
 
 // ── Priority config ──────────────────────────────────────────────
 const PRIORITY_CONFIG = {
@@ -47,6 +50,7 @@ export default function Watchlist() {
   const [priority,    setPriority]    = useState('HIGH')
   const [description, setDescription] = useState('')
   const [submitting,  setSubmitting]  = useState(false)
+  const [modal, setModal] = useState({ open: false, title: '', message: '', variant: 'info' })
 
   const fetchWatchlist = async () => {
     setLoading(true)
@@ -66,6 +70,19 @@ export default function Watchlist() {
   const handleSubmit = async (e) => {
     e.preventDefault()
     if (!identifier.trim()) return
+
+    const normalised = normalizePlate(identifier)
+    const duplicate = entries.find(en => en.active && en.identifier === normalised)
+    if (duplicate) {
+      setModal({
+        open: true,
+        title: 'Already on Watchlist',
+        message: `${normalised} is already an active entry in the watchlist.`,
+        variant: 'warning',
+      })
+      return
+    }
+
     setSubmitting(true)
     try {
       await api.post('/watchlist', {
@@ -78,9 +95,20 @@ export default function Watchlist() {
       setIdentifier('')
       setDescription('')
       fetchWatchlist()
+      setModal({
+        open: true,
+        title: 'Added to Watchlist',
+        message: `${normalised} was added to the watchlist successfully.`,
+        variant: 'success',
+      })
     } catch (err) {
       const detail = err.response?.data?.detail
-      alert(Array.isArray(detail) ? detail.map(d => d.msg).join('\n') : detail || 'Failed to add entry')
+      setModal({
+        open: true,
+        title: 'Failed to Add Entry',
+        message: Array.isArray(detail) ? detail.map(d => d.msg).join('\n') : detail || 'Please try again.',
+        variant: 'error',
+      })
     } finally {
       setSubmitting(false)
     }
@@ -91,8 +119,9 @@ export default function Watchlist() {
     try {
       await api.delete(`/watchlist/${id}`)
       fetchWatchlist()
+      setModal({ open: true, title: 'Entry Removed', message: 'The watchlist entry was removed successfully.', variant: 'success' })
     } catch {
-      alert('Failed to remove entry')
+      setModal({ open: true, title: 'Failed to Remove Entry', message: 'Please try again.', variant: 'error' })
     }
   }
 
@@ -296,6 +325,15 @@ export default function Watchlist() {
           </div>
         )}
       </div>
+
+      <Modal
+        open={modal.open}
+        title={modal.title}
+        message={modal.message}
+        variant={modal.variant}
+        autoCloseMs={modal.variant === 'success' ? 2000 : undefined}
+        onClose={() => setModal(m => ({ ...m, open: false }))}
+      />
     </div>
   )
 }

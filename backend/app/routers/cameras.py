@@ -7,6 +7,7 @@ from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile, File
 from fastapi.responses import Response
 from sqlalchemy.orm import Session
+from sqlalchemy.exc import IntegrityError
 
 from app.database import get_db
 from app.models.camera import Camera
@@ -198,9 +199,23 @@ def create_camera(
     user: User = Depends(require_admin),
 ):
     """Onboard a new camera. ADMIN only."""
+    existing = db.query(Camera).filter(Camera.name == payload.name).first()
+    if existing:
+        raise HTTPException(
+            status_code=409,
+            detail=f"A camera named '{payload.name}' already exists.",
+        )
+
     camera = Camera(**payload.model_dump())
     db.add(camera)
-    db.commit()
+    try:
+        db.commit()
+    except IntegrityError:
+        db.rollback()
+        raise HTTPException(
+            status_code=409,
+            detail=f"A camera named '{payload.name}' already exists.",
+        )
     db.refresh(camera)
     log_audit(db, user, "CREATE", "CAMERA", camera.name, payload.model_dump())
     return camera
