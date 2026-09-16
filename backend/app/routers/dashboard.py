@@ -1,5 +1,6 @@
 from fastapi import APIRouter, Depends
-from sqlalchemy.orm import Session
+from sqlalchemy import select, func
+from sqlalchemy.ext.asyncio import AsyncSession
 from datetime import datetime, timezone, timedelta
 
 from app.database import get_db
@@ -13,21 +14,23 @@ from app.models.alert import Alert
 router = APIRouter(prefix="/api/dashboard", tags=["dashboard"])
 
 @router.get("/summary")
-def get_dashboard_summary(
-    db: Session = Depends(get_db),
+async def get_dashboard_summary(
+    db: AsyncSession = Depends(get_db),
     _: User = Depends(get_current_user),
 ):
-    camera_count = db.query(Camera).count()
-    online_count = db.query(Camera).filter(Camera.status == "ONLINE").count()
-    offline_count = db.query(Camera).filter(Camera.status == "OFFLINE").count()
-    maintenance_count = db.query(Camera).filter(Camera.status == "MAINTENANCE").count()
-    
+    camera_count = (await db.execute(select(func.count(Camera.id)))).scalar_one()
+    online_count = (await db.execute(select(func.count(Camera.id)).filter(Camera.status == "ONLINE"))).scalar_one()
+    offline_count = (await db.execute(select(func.count(Camera.id)).filter(Camera.status == "OFFLINE"))).scalar_one()
+    maintenance_count = (await db.execute(select(func.count(Camera.id)).filter(Camera.status == "MAINTENANCE"))).scalar_one()
+
     today = datetime.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0)
-    events_today = db.query(VehicleEvent).filter(VehicleEvent.event_time >= today).count()
-    
-    new_alerts = db.query(Alert).filter(Alert.status == "NEW").count()
-    watchlist_count = db.query(Watchlist).count()
-    
+    events_today = (await db.execute(
+        select(func.count(VehicleEvent.id)).filter(VehicleEvent.event_time >= today)
+    )).scalar_one()
+
+    new_alerts = (await db.execute(select(func.count(Alert.id)).filter(Alert.status == "NEW"))).scalar_one()
+    watchlist_count = (await db.execute(select(func.count(Watchlist.id)))).scalar_one()
+
     return {
         "camera_count": camera_count,
         "online_count": online_count,
@@ -39,11 +42,12 @@ def get_dashboard_summary(
     }
 
 @router.get("/recent-alerts")
-def get_recent_alerts(
+async def get_recent_alerts(
     limit: int = 5,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
     _: User = Depends(get_current_user),
 ):
-    alerts = db.query(Alert).order_by(Alert.created_at.desc()).limit(limit).all()
+    result = await db.execute(select(Alert).order_by(Alert.created_at.desc()).limit(limit))
+    alerts = result.scalars().all()
     from app.schemas.alert import AlertOut
     return [AlertOut.model_validate(a) for a in alerts]

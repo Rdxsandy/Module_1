@@ -5,7 +5,8 @@ POST /api/auth/login  - public, returns JWT
 GET  /api/auth/me     - requires valid JWT
 """
 from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy.orm import Session
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
 from app.models.user import User
@@ -17,16 +18,19 @@ router = APIRouter(prefix="/api/auth", tags=["auth"])
 
 
 @router.post("/login", response_model=TokenResponse)
-def login(payload: LoginRequest, db: Session = Depends(get_db)):
+async def login(payload: LoginRequest, db: AsyncSession = Depends(get_db)):
     """
     Authenticate user and return a signed JWT.
     Returns generic 401 for any invalid credentials (no leaking which field is wrong).
     """
     # Lookup by username
-    user = db.query(User).filter(
-        User.username == payload.username,
-        User.is_active.is_(True)
-    ).first()
+    result = await db.execute(
+        select(User).filter(
+            User.username == payload.username,
+            User.is_active.is_(True)
+        )
+    )
+    user = result.scalar_one_or_none()
 
     # Verify password - always run verify even if user not found to prevent timing attacks
     if not user or not verify_password(payload.password, user.password_hash):

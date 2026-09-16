@@ -4,7 +4,9 @@ routers/vehicles.py - Vehicle history endpoint.
 GET /api/vehicles/{vehicle_number}/history - AUTHENTICATED
 """
 from fastapi import APIRouter, Depends
-from sqlalchemy.orm import Session, joinedload
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import joinedload
 
 from app.database import get_db
 from app.models.vehicle_event import VehicleEvent
@@ -17,21 +19,21 @@ router = APIRouter(prefix="/api/vehicles", tags=["vehicles"])
 
 
 @router.get("/{vehicle_number}/history", response_model=VehicleHistoryOut)
-def get_vehicle_history(
+async def get_vehicle_history(
     vehicle_number: str,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
     _: User = Depends(get_current_user),
 ):
     """Return ordered movement history for a vehicle. Requires login."""
     normalised = normalize_vehicle_number(vehicle_number)
 
-    events = (
-        db.query(VehicleEvent)
+    result = await db.execute(
+        select(VehicleEvent)
         .options(joinedload(VehicleEvent.camera))
         .filter(VehicleEvent.vehicle_number == normalised)
         .order_by(VehicleEvent.event_time.asc())
-        .all()
     )
+    events = result.unique().scalars().all()
 
     history = [
         VehicleHistoryItem(
@@ -45,7 +47,7 @@ def get_vehicle_history(
         for e in events
     ]
 
-    wl = match_watchlist(db, normalised)
+    wl = await match_watchlist(db, normalised)
 
     return VehicleHistoryOut(
         vehicle_number=normalised,

@@ -1,8 +1,8 @@
-from sqlalchemy.orm import Session
+from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.audit_log import AuditLog
 from app.models.user import User
 
-def log_audit(db: Session, user: User, action: str, entity_type: str, entity_id: str = None, details: dict = None):
+async def log_audit(db: AsyncSession, user: User, action: str, entity_type: str, entity_id: str = None, details: dict = None):
     audit = AuditLog(
         user_id=user.id,
         action=action,
@@ -11,4 +11,4 @@ def log_audit(db: Session, user: User, action: str, entity_type: str, entity_id:
         details=details
     )
     db.add(audit)
-    db.commit()
+    await db.commit()

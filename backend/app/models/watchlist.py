@@ -18,9 +18,9 @@ class Watchlist(Base):
     priority = Column(String(20), nullable=False, default="HIGH")  # LOW | MEDIUM | HIGH | CRITICAL
     active = Column(Boolean, nullable=False, default=True, index=True)
     metadata_json = Column(JSON, nullable=True)
-    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
     updated_at = Column(
-        DateTime,
+        DateTime(timezone=True),
         default=lambda: datetime.now(timezone.utc),
         onupdate=lambda: datetime.now(timezone.utc),
     )

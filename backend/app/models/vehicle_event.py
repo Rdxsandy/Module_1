@@ -16,14 +16,14 @@ class VehicleEvent(Base):
     id = Column(Integer, primary_key=True, index=True)
     camera_id = Column(Integer, ForeignKey("cameras.id"), nullable=False, index=True)
     vehicle_number = Column(String(50), nullable=False, index=True)  # normalised
-    event_time = Column(DateTime, nullable=False, index=True)
+    event_time = Column(DateTime(timezone=True), nullable=False, index=True)
     latitude = Column(Float, nullable=False)
     longitude = Column(Float, nullable=False)
     confidence = Column(Float, nullable=True, default=1.0)
     event_type = Column(String(50), nullable=False, default="ANPR")
     # raw_payload stores the original request body as JSON text (JSONB in PostgreSQL)
     raw_payload = Column(Text, nullable=True)
-    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
 
     # Relationships
     camera = relationship("Camera", backref="events")

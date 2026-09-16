@@ -11,4 +11,4 @@ class AuditLog(Base):
     entity_type = Column(String(50), nullable=False) # e.g., "CAMERA", "ALERT", "WATCHLIST"
     entity_id = Column(String(50), nullable=True) 
     details = Column(JSON, nullable=True) # Any additional context
-    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))

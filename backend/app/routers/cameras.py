@@ -6,7 +6,8 @@ import csv
 from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile, File
 from fastapi.responses import Response
-from sqlalchemy.orm import Session
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.exc import IntegrityError
 
 from app.database import get_db
@@ -39,7 +40,7 @@ def download_template(_: User = Depends(get_current_user)):
 @router.post("/bulk-upload")
 async def bulk_upload_cameras(
     file: UploadFile = File(...),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
     user: User = Depends(require_admin),
 ):
     """
@@ -74,7 +75,8 @@ async def bulk_upload_cameras(
     errors = []
     
     # Pre-fetch existing names to check for duplicates in memory
-    existing_names = {c[0] for c in db.query(Camera.name).all()}
+    existing_result = await db.execute(select(Camera.name))
+    existing_names = {row[0] for row in existing_result.all()}
     
     cameras_to_add = []
 
@@ -159,9 +161,9 @@ async def bulk_upload_cameras(
             
     if cameras_to_add:
         db.add_all(cameras_to_add)
-        db.commit()
+        await db.commit()
         imported = len(cameras_to_add)
-        log_audit(db, user, "BULK_IMPORT", "CAMERA", None, {"imported": imported, "failed": failed})
+        await log_audit(db, user, "BULK_IMPORT", "CAMERA", None, {"imported": imported, "failed": failed})
         
     return {
         "total": total,
@@ -172,16 +174,16 @@ async def bulk_upload_cameras(
 
 
 @router.get("", response_model=list[CameraOut])
-def list_cameras(
+async def list_cameras(
     department: Optional[str] = Query(None),
     status: Optional[str] = Query(None),
     camera_type: Optional[str] = Query(None),
     search: Optional[str] = Query(None, description="Search by camera name"),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
     _: User = Depends(get_current_user),
 ):
     """Return all cameras with optional filters. Requires login."""
-    q = db.query(Camera)
+    q = select(Camera)
     if department:
         q = q.filter(Camera.department == department)
     if status:
@@ -190,16 +192,18 @@ def list_cameras(
         q = q.filter(Camera.camera_type == camera_type)
     if search:
         q = q.filter(Camera.name.ilike(f"%{search}%"))
-    return q.order_by(Camera.id).all()
+    result = await db.execute(q.order_by(Camera.id))
+    return result.scalars().all()
 
 @router.post("", response_model=CameraOut, status_code=201)
-def create_camera(
+async def create_camera(
     payload: CameraCreate,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
     user: User = Depends(require_admin),
 ):
     """Onboard a new camera. ADMIN only."""
-    existing = db.query(Camera).filter(Camera.name == payload.name).first()
+    result = await db.execute(select(Camera).filter(Camera.name == payload.name))
+    existing = result.scalar_one_or_none()
     if existing:
         raise HTTPException(
             status_code=409,
@@ -209,24 +213,25 @@ def create_camera(
     camera = Camera(**payload.model_dump())
     db.add(camera)
     try:
-        db.commit()
+        await db.commit()
     except IntegrityError:
-        db.rollback()
+        await db.rollback()
         raise HTTPException(
             status_code=409,
             detail=f"A camera named '{payload.name}' already exists.",
         )
-    db.refresh(camera)
-    log_audit(db, user, "CREATE", "CAMERA", camera.name, payload.model_dump())
+    await db.refresh(camera)
+    await log_audit(db, user, "CREATE", "CAMERA", camera.name, payload.model_dump())
     return camera
 
 @router.get("/{camera_id}", response_model=CameraOut)
-def get_camera(
+async def get_camera(
     camera_id: int,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
     _: User = Depends(get_current_user),
 ):
-    camera = db.query(Camera).filter(Camera.id == camera_id).first()
+    result = await db.execute(select(Camera).filter(Camera.id == camera_id))
+    camera = result.scalar_one_or_none()
     if not camera:
         raise HTTPException(status_code=404, detail="Camera not found")
     return camera

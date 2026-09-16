@@ -11,7 +11,8 @@ GET  /api/events  - AUTHENTICATED
 from typing import Optional
 from datetime import datetime
 from fastapi import APIRouter, Depends, Query
-from sqlalchemy.orm import Session
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
 from app.schemas.event import EventCreate, EventOut, EventAckResponse
@@ -33,20 +34,20 @@ def ingest_event(
 
 
 @router.get("", response_model=list[EventOut])
-def search_events(
+async def search_events(
     vehicle_number: Optional[str] = Query(None),
     camera_id: Optional[int] = Query(None),
     start_time: Optional[datetime] = Query(None),
     end_time: Optional[datetime] = Query(None),
     limit: int = Query(100, le=500),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
     _: User = Depends(get_current_user),
 ):
     """Search events with optional filters. Requires login."""
     from app.models.vehicle_event import VehicleEvent
     from app.services.watchlist_service import normalize_vehicle_number
 
-    q = db.query(VehicleEvent)
+    q = select(VehicleEvent)
     if vehicle_number:
         q = q.filter(VehicleEvent.vehicle_number == normalize_vehicle_number(vehicle_number))
     if camera_id:
@@ -55,4 +56,5 @@ def search_events(
         q = q.filter(VehicleEvent.event_time >= start_time)
     if end_time:
         q = q.filter(VehicleEvent.event_time <= end_time)
-    return q.order_by(VehicleEvent.event_time.desc()).limit(limit).all()
+    result = await db.execute(q.order_by(VehicleEvent.event_time.desc()).limit(limit))
+    return result.scalars().all()

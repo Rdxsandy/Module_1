@@ -13,7 +13,8 @@ Routers, mock generators and future real adapters all go through here.
 """
 import json
 from datetime import datetime, timezone
-from sqlalchemy.orm import Session
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.camera import Camera
 from app.models.vehicle_event import VehicleEvent
@@ -22,8 +23,8 @@ from app.schemas.event import EventCreate
 from app.services.watchlist_service import match_watchlist, normalize_vehicle_number
 
 
-def process_event(
-    db: Session,
+async def process_event(
+    db: AsyncSession,
     payload: EventCreate,
 ) -> tuple[VehicleEvent, Alert | None]:
     """
@@ -33,7 +34,8 @@ def process_event(
     Raises ValueError if camera_id does not exist.
     """
     # --- 1. Validate camera ---
-    camera = db.query(Camera).filter(Camera.name == payload.camera_id).first()
+    result = await db.execute(select(Camera).filter(Camera.name == payload.camera_id))
+    camera = result.scalar_one_or_none()
     if not camera:
         raise ValueError(f"Camera name '{payload.camera_id}' not found")
 
@@ -51,10 +53,10 @@ def process_event(
         created_at=datetime.now(timezone.utc),
     )
     db.add(event)
-    db.flush()  # get event.id before committing
+    await db.flush()  # get event.id before committing
 
     # --- 3. Watchlist match ---
-    wl_entry = match_watchlist(db, normalised_plate)
+    wl_entry = await match_watchlist(db, normalised_plate)
 
     # --- 4. Create alert if matched ---
     alert: Alert | None = None
@@ -74,9 +76,9 @@ def process_event(
         )
         db.add(alert)
 
-    db.commit()
-    db.refresh(event)
+    await db.commit()
+    await db.refresh(event)
     if alert:
-        db.refresh(alert)
+        await db.refresh(alert)
 
     return event, alert

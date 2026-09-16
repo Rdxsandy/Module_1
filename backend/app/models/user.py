@@ -15,9 +15,9 @@ class User(Base):
     password_hash = Column(String(200), nullable=False)
     role = Column(String(20), nullable=False, default="OPERATOR")  # ADMIN | OPERATOR
     is_active = Column(Boolean, default=True, nullable=False)
-    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
     updated_at = Column(
-        DateTime,
+        DateTime(timezone=True),
         default=lambda: datetime.now(timezone.utc),
         onupdate=lambda: datetime.now(timezone.utc),
     )

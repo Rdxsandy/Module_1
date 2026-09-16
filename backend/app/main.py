@@ -5,10 +5,7 @@ import os
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.database import engine, Base
-
-# Import all models so SQLAlchemy creates all tables
-import app.models  # noqa: F401
+import app.models  # noqa: F401 - ensure all models are registered with SQLAlchemy
 
 from app.routers import cameras, events, vehicles, alerts, watchlist
 from app.auth import router as auth_router
@@ -41,16 +38,11 @@ app.add_middleware(
 )
 
 # ---------------------------------------------------------------------------
-# DB tables on startup
-# ---------------------------------------------------------------------------
-
-@app.on_event("startup")
-def create_tables():
-    Base.metadata.create_all(bind=engine)
-
-
-# ---------------------------------------------------------------------------
 # Routers
+#
+# Table creation/schema changes are handled entirely by Alembic
+# (`alembic upgrade head`) — the async engine intentionally has no
+# equivalent of the old synchronous create_all()-on-startup.
 # ---------------------------------------------------------------------------
 
 app.include_router(auth_router.router)   # /api/auth/login, /api/auth/me

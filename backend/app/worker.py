@@ -8,6 +8,7 @@ validation, persistence, and alerting.
 Run as a separate process:
     celery -A app.worker.celery_app worker --loglevel=info
 """
+import asyncio
 import os
 from dotenv import load_dotenv
 load_dotenv()
@@ -29,6 +30,22 @@ celery_app.conf.update(
 )
 
 
+# One persistent event loop per worker process (not asyncio.run() per task):
+# asyncpg connections are bound to the loop that created them, so a fresh
+# loop per task would strand the async engine's pooled connections and
+# force a brand-new (SSL) handshake with Neon on every single event.
+# Created lazily so a prefork worker's forked children each get their own
+# loop instead of inheriting the parent's (asyncio loops aren't fork-safe).
+_worker_loop: asyncio.AbstractEventLoop | None = None
+
+
+def _get_worker_loop() -> asyncio.AbstractEventLoop:
+    global _worker_loop
+    if _worker_loop is None or _worker_loop.is_closed():
+        _worker_loop = asyncio.new_event_loop()
+    return _worker_loop
+
+
 @celery_app.task(
     name="process_vehicle_event_task",
     autoretry_for=(OperationalError,),
@@ -44,21 +61,26 @@ def process_vehicle_event_task(payload_json: str) -> None:
 
     Invalid camera_id -> dropped and logged (not retried, not a transient
     failure). DB connectivity errors -> retried with backoff by Celery.
+
+    Celery invokes tasks synchronously, so this bridges into the async DB
+    session via this worker process's persistent event loop.
     """
+    _get_worker_loop().run_until_complete(_process_vehicle_event(payload_json))
+
+
+async def _process_vehicle_event(payload_json: str) -> None:
     from app.database import SessionLocal
     from app.schemas.event import EventCreate
     from app.services.event_service import process_event
 
     payload = EventCreate.model_validate_json(payload_json)
-    db = SessionLocal()
-    try:
-        event, alert = process_event(db, payload)
-        alert_info = f" -> ALERT #{alert.id}" if alert else ""
-        logger.info(f"Processed event #{event.id} ({payload.vehicle_number}){alert_info}")
-    except ValueError as exc:
-        logger.warning(f"Dropping event for camera '{payload.camera_id}': {exc}")
-    except OperationalError:
-        db.rollback()
-        raise
-    finally:
-        db.close()
+    async with SessionLocal() as db:
+        try:
+            event, alert = await process_event(db, payload)
+            alert_info = f" -> ALERT #{alert.id}" if alert else ""
+            logger.info(f"Processed event #{event.id} ({payload.vehicle_number}){alert_info}")
+        except ValueError as exc:
+            logger.warning(f"Dropping event for camera '{payload.camera_id}': {exc}")
+        except OperationalError:
+            await db.rollback()
+            raise

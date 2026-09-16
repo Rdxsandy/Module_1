@@ -6,8 +6,8 @@ A full-stack Proof-of-Concept demonstrating a central camera registry, real-time
 
 | Layer | Technology |
 |---|---|
-| Backend | FastAPI + Python |
-| Database | Neon PostgreSQL (via SQLAlchemy) |
+| Backend | FastAPI + Python (fully async, asyncpg) |
+| Database | Neon PostgreSQL (via SQLAlchemy async engine, pooled) |
 | Task Queue | Celery + RabbitMQ (async event ingestion) |
 | Frontend | React 18 + Vite |
 | Map | react-leaflet + OpenStreetMap |
@@ -147,7 +147,9 @@ When real government CCTV feeds are provided, only `FutureRTSPEventSource` needs
 Copy `.env.example` to `.env`:
 
 ```
-DATABASE_URL=postgresql://user:password@ep-example-12345.us-east-2.aws.neon.tech/dbname?sslmode=require
+DATABASE_URL=postgresql+asyncpg://user:password@ep-example-12345.us-east-2.aws.neon.tech/dbname?sslmode=require
 CORS_ORIGINS=http://localhost:5173,http://localhost:3000
 CELERY_BROKER_URL=amqp://guest:guest@localhost:5672//
 ```
+
+**Important**: use Neon's *direct* endpoint (no `-pooler` in the hostname), not the pooled/PgBouncer one. This app keeps its own connection pool (see `app/database.py`), and PgBouncer's transaction-pooling mode is incompatible with asyncpg's server-side prepared statements — mixing the two causes `asyncpg.exceptions.InvalidCachedStatementError`. Migrations (Alembic) work fine with either endpoint since they run over a separate sync psycopg2 connection.

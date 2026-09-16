@@ -19,8 +19,8 @@ class Alert(Base):
     severity = Column(String(20), nullable=False, default="high")
     message = Column(String(500), nullable=False)
     status = Column(String(20), nullable=False, default="NEW", index=True)  # NEW/ACKNOWLEDGED/RESOLVED
-    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), index=True)
-    acknowledged_at = Column(DateTime, nullable=True)
+    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), index=True)
+    acknowledged_at = Column(DateTime(timezone=True), nullable=True)
 
     # Relationships
     event = relationship("VehicleEvent", back_populates="alerts")

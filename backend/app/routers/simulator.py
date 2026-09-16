@@ -1,6 +1,8 @@
-from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy.orm import Session
+import asyncio
 import threading
+from fastapi import APIRouter, Depends, HTTPException
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db, SessionLocal
 from app.auth.dependencies import get_current_user, require_admin
@@ -18,17 +20,22 @@ _simulator_source: LiveTrafficSimulator | None = None
 is_running = False
 
 
-def _on_simulated_event(payload: EventCreate):
+async def _process_simulated_event(payload: EventCreate):
     """Each event gets its own short-lived session — safe across the
     background simulator thread without holding a session open for the
     whole run."""
-    db = SessionLocal()
-    try:
-        process_event(db, payload)
-    except Exception as e:
-        print(f"Simulator error processing event: {e}")
-    finally:
-        db.close()
+    async with SessionLocal() as db:
+        try:
+            await process_event(db, payload)
+        except Exception as e:
+            print(f"Simulator error processing event: {e}")
+
+
+def _on_simulated_event(payload: EventCreate):
+    """Sync callback required by the EventSource interface (it runs on a
+    plain background thread, not the asyncio event loop) — bridges into
+    the async DB session with its own event loop."""
+    asyncio.run(_process_simulated_event(payload))
 
 
 def _run(source: LiveTrafficSimulator):
@@ -40,27 +47,28 @@ def _run(source: LiveTrafficSimulator):
 
 
 @router.post("/start")
-def start_simulator(
-    db: Session = Depends(get_db),
+async def start_simulator(
+    db: AsyncSession = Depends(get_db),
     user: User = Depends(require_admin),
 ):
     global _simulator_source, is_running
     if is_running:
         raise HTTPException(status_code=400, detail="Simulator is already running")
 
-    cameras = [
-        {"name": c.name, "latitude": c.latitude, "longitude": c.longitude}
-        for c in db.query(Camera).filter(Camera.status == "ONLINE").all()
-    ] or [
-        {"name": c.name, "latitude": c.latitude, "longitude": c.longitude}
-        for c in db.query(Camera).all()
-    ]
+    online_result = await db.execute(select(Camera).filter(Camera.status == "ONLINE"))
+    online_cameras = online_result.scalars().all()
+    if online_cameras:
+        camera_rows = online_cameras
+    else:
+        all_result = await db.execute(select(Camera))
+        camera_rows = all_result.scalars().all()
+
+    cameras = [{"name": c.name, "latitude": c.latitude, "longitude": c.longitude} for c in camera_rows]
     if not cameras:
         raise HTTPException(status_code=400, detail="No cameras registered — cannot start simulator")
 
-    watchlist_plates = [
-        w.identifier for w in db.query(Watchlist).filter(Watchlist.active.is_(True)).all()
-    ]
+    wl_result = await db.execute(select(Watchlist).filter(Watchlist.active.is_(True)))
+    watchlist_plates = [w.identifier for w in wl_result.scalars().all()]
 
     _simulator_source = LiveTrafficSimulator(
         on_event=_on_simulated_event,
@@ -90,14 +98,14 @@ def stop_simulator(
 
 
 @router.post("/emit")
-def emit_single_event(
+async def emit_single_event(
     payload: EventCreate,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
     user: User = Depends(require_admin),
 ):
     """Manually emit a single event (like start but 1 event without thread)"""
     try:
-        event, alert = process_event(db, payload)
+        event, alert = await process_event(db, payload)
         return {"status": "emitted", "event_id": event.id}
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
