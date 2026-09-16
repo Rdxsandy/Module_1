@@ -1,5 +1,5 @@
 """
-seed.py - Populate the SQLite database with representative demo data.
+seed.py - Populate the Neon (PostgreSQL) database with representative demo data.
 
 Run from the backend/ directory:
     python seed.py

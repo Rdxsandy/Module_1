@@ -1,8 +1,7 @@
 """
 database.py — SQLAlchemy engine + session factory.
 
-Using SQLite for the PoC (zero-install, file-based).
-Swap DATABASE_URL to a PostgreSQL DSN in .env when moving to production.
+Uses Neon (PostgreSQL) via DATABASE_URL in .env.
 """
 import os
 from dotenv import load_dotenv
@@ -10,12 +9,11 @@ load_dotenv()
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker, declarative_base
 
-DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///./cctv.db")
+DATABASE_URL = os.getenv("DATABASE_URL")
+if not DATABASE_URL:
+    raise RuntimeError("DATABASE_URL is not set. Configure your Neon PostgreSQL connection string in .env.")
 
-# check_same_thread=False is required for SQLite when FastAPI uses multiple threads
-connect_args = {"check_same_thread": False} if DATABASE_URL.startswith("sqlite") else {}
-
-engine = create_engine(DATABASE_URL, connect_args=connect_args, echo=False)
+engine = create_engine(DATABASE_URL, echo=False)
 
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 

@@ -7,7 +7,7 @@ A full-stack Proof-of-Concept demonstrating a central camera registry, real-time
 | Layer | Technology |
 |---|---|
 | Backend | FastAPI + Python |
-| Database | SQLite (via SQLAlchemy) |
+| Database | Neon PostgreSQL (via SQLAlchemy) |
 | Frontend | React 18 + Vite |
 | Map | react-leaflet + OpenStreetMap |
 | Schemas | Pydantic v2 |
@@ -111,7 +111,7 @@ React (UI)
    │  REST/JSON
 FastAPI (API + Business Logic + Audit Logs)
    │  SQLAlchemy
-SQLite (← swap to PostgreSQL via DATABASE_URL env var)
+Neon PostgreSQL (via DATABASE_URL env var)
 
 EventSource interface (event_sources/base.py)
    ├── MockEventSource  ← used now (Simulates Deterministic AI Events)
@@ -127,7 +127,7 @@ When real government CCTV feeds are provided, only `FutureRTSPEventSource` needs
 Copy `.env.example` to `.env`:
 
 ```
-DATABASE_URL=sqlite:///./cctv.db
+DATABASE_URL=postgresql://user:password@ep-example-12345.us-east-2.aws.neon.tech/dbname?sslmode=require
 CORS_ORIGINS=http://localhost:5173,http://localhost:3000
 ```
 
