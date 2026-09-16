@@ -50,9 +50,27 @@ export default function VehicleTracking() {
     try {
       const res = await postEvent(payload)
       setEvResult(res.data)
-      search() // refresh history
+      pollHistoryAfterQueue()
     } catch (err) {
       setEvResult({ error: err.response?.data?.detail || 'Error sending event' })
+    }
+  }
+
+  // Event ingestion is async now (queued to a background worker), so the
+  // new event may not be persisted yet — retry the history fetch a few
+  // times instead of refreshing once immediately.
+  const pollHistoryAfterQueue = async () => {
+    const before = result?.history?.length ?? 0
+    for (let attempt = 0; attempt < 4; attempt++) {
+      await new Promise(r => setTimeout(r, 700))
+      try {
+        const res = await getVehicleHistory(input.trim())
+        setResult(res.data)
+        setFitRoute(true)
+        if (res.data.history.length > before) return
+      } catch {
+        // no history yet for this plate — keep retrying
+      }
     }
   }
 

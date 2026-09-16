@@ -18,6 +18,11 @@ class EventCreate(BaseModel):
     source: Optional[Dict[str, Any]] = None
 
 
+class EventAckResponse(BaseModel):
+    status: str = "queued"
+    message: str = "Event accepted for background processing"
+
+
 class EventOut(BaseModel):
     id: int
     camera_id: int
