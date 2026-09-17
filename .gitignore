@@ -46,3 +46,6 @@ dist-ssr/
 Thumbs.db
 
 CCTV_Complete_Solution_AI_Agent_Specification31.pdf
+
+# Uploaded camera feed videos
+backend/uploads/

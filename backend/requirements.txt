@@ -11,3 +11,5 @@ python-jose[cryptography]==3.3.0
 passlib[bcrypt]==1.7.4
 alembic==1.13.1
 celery==5.4.0
+opencv-python==5.0.0.93
+requests==2.34.2

@@ -2,10 +2,14 @@
  * pages/Dashboard.jsx — Screen 1
  * Shows stats cards, recent alerts, and quick navigation links.
  */
-import React, { useEffect, useState } from 'react'
+import React, { useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { FaHome, FaStop, FaPlay, FaMapMarkedAlt, FaVideo, FaCar, FaExclamationTriangle } from 'react-icons/fa'
-import { getDashboardSummary, getRecentAlerts, startSimulator, stopSimulator, getSimulatorStatus } from '../api/client'
+import { FaHome, FaStop, FaPlay, FaMapMarkedAlt, FaVideo, FaCar, FaExclamationTriangle, FaUpload } from 'react-icons/fa'
+import {
+  getDashboardSummary, getRecentAlerts,
+  startSimulator, stopSimulator, getSimulatorStatus,
+  uploadCameraFeed, stopCameraFeed, getCameraFeedStatus,
+} from '../api/client'
 import StatsCards from '../components/StatsCards'
 import AlertList from '../components/AlertList'
 import Modal from '../components/Modal'
@@ -15,18 +19,25 @@ export default function Dashboard() {
   const [alerts, setAlerts] = useState([])
   const [loading, setLoading] = useState(true)
   const [simulatorRunning, setSimulatorRunning] = useState(false)
+  const [feedRunning, setFeedRunning] = useState(false)
+  const [feedFilename, setFeedFilename] = useState(null)
+  const [uploading, setUploading] = useState(false)
   const [modal, setModal] = useState({ open: false, title: '', message: '', variant: 'info' })
+  const fileInputRef = useRef(null)
 
   const load = async () => {
     try {
-      const [sumRes, alertRes, simRes] = await Promise.all([
+      const [sumRes, alertRes, simRes, feedRes] = await Promise.all([
         getDashboardSummary(),
         getRecentAlerts({ limit: 5 }),
-        getSimulatorStatus().catch(() => ({ data: { running: false } }))
+        getSimulatorStatus().catch(() => ({ data: { running: false } })),
+        getCameraFeedStatus().catch(() => ({ data: { running: false, filename: null } })),
       ])
       setSummary(sumRes.data)
       setAlerts(alertRes.data)
       setSimulatorRunning(simRes.data.running)
+      setFeedRunning(feedRes.data.running)
+      setFeedFilename(feedRes.data.filename)
     } catch (err) {
       console.error(err)
     } finally {
@@ -54,26 +65,97 @@ export default function Dashboard() {
     }
   };
 
+  const handleVideoButtonClick = () => {
+    if (feedRunning) {
+      stopVideoFeed();
+    } else {
+      fileInputRef.current?.click();
+    }
+  };
+
+  const handleFileSelected = async (e) => {
+    const file = e.target.files?.[0];
+    e.target.value = ''; // allow re-selecting the same file later
+    if (!file) return;
+
+    setUploading(true);
+    try {
+      await uploadCameraFeed(file, 'Camera-01');
+      setFeedRunning(true);
+      setFeedFilename(file.name);
+      setModal({ open: true, title: 'Video Feed Started', message: `Streaming "${file.name}" to the ANPR pipeline.`, variant: 'success' });
+    } catch (e) {
+      console.error(e);
+      const detail = e.response?.data?.detail;
+      setModal({ open: true, title: 'Failed to Start Video Feed', message: detail || 'Please try again.', variant: 'error' });
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  const stopVideoFeed = async () => {
+    try {
+      await stopCameraFeed();
+      setFeedRunning(false);
+      setFeedFilename(null);
+      setModal({ open: true, title: 'Video Feed Stopped', message: 'The uploaded video feed was stopped.', variant: 'success' });
+    } catch (e) {
+      console.error(e);
+      const detail = e.response?.data?.detail;
+      setModal({ open: true, title: 'Failed to Stop Video Feed', message: detail || 'Please try again.', variant: 'error' });
+    }
+  };
+
   return (
     <div>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
         <h1 style={h1}><FaHome style={{ marginRight: 8, verticalAlign: 'middle' }} />Dashboard</h1>
-        <button 
-          onClick={toggleSimulator}
-          style={{
-            padding: '8px 16px',
-            borderRadius: '6px',
-            border: 'none',
-            background: simulatorRunning ? '#ef4444' : '#10b981',
-            color: 'white',
-            fontWeight: 'bold',
-            cursor: 'pointer'
-          }}
-        >
-          {simulatorRunning
-            ? <><FaStop style={{ marginRight: 6, verticalAlign: 'middle' }} />Stop Simulator</>
-            : <><FaPlay style={{ marginRight: 6, verticalAlign: 'middle' }} />Start Simulator</>}
-        </button>
+        <div style={{ display: 'flex', gap: 10 }}>
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept="video/*"
+            style={{ display: 'none' }}
+            onChange={handleFileSelected}
+          />
+          <button
+            onClick={handleVideoButtonClick}
+            disabled={uploading}
+            style={{
+              padding: '8px 16px',
+              borderRadius: '6px',
+              border: 'none',
+              background: feedRunning ? '#ef4444' : '#3b82f6',
+              color: 'white',
+              fontWeight: 'bold',
+              cursor: uploading ? 'not-allowed' : 'pointer',
+              opacity: uploading ? 0.7 : 1,
+            }}
+            title={feedFilename ? `Currently streaming: ${feedFilename}` : undefined}
+          >
+            {uploading
+              ? 'Uploading…'
+              : feedRunning
+                ? <><FaStop style={{ marginRight: 6, verticalAlign: 'middle' }} />Stop Video Feed</>
+                : <><FaUpload style={{ marginRight: 6, verticalAlign: 'middle' }} />Upload Video Feed</>}
+          </button>
+          <button
+            onClick={toggleSimulator}
+            style={{
+              padding: '8px 16px',
+              borderRadius: '6px',
+              border: 'none',
+              background: simulatorRunning ? '#ef4444' : '#10b981',
+              color: 'white',
+              fontWeight: 'bold',
+              cursor: 'pointer'
+            }}
+          >
+            {simulatorRunning
+              ? <><FaStop style={{ marginRight: 6, verticalAlign: 'middle' }} />Stop Simulator</>
+              : <><FaPlay style={{ marginRight: 6, verticalAlign: 'middle' }} />Start Simulator</>}
+          </button>
+        </div>
       </div>
       {loading ? <p>Loading…</p> : (
         <>

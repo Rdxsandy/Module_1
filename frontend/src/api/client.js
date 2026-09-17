@@ -71,6 +71,18 @@ export const startSimulator = () => api.post('/simulator/start')
 export const stopSimulator  = () => api.post('/simulator/stop')
 export const getSimulatorStatus = () => api.get('/simulator/status')
 
+// ---- Camera Feed (video file -> ANPR pipeline) ----
+export const uploadCameraFeed = (file, cameraId) => {
+  const formData = new FormData()
+  formData.append('file', file)
+  formData.append('camera_id', cameraId)
+  return api.post('/camera-feed/upload', formData, {
+    headers: { 'Content-Type': 'multipart/form-data' }
+  })
+}
+export const stopCameraFeed = ()      => api.post('/camera-feed/stop')
+export const getCameraFeedStatus = () => api.get('/camera-feed/status')
+
 // ---- Watchlist ----
 export const getWatchlist        = ()     => api.get('/watchlist')
 export const addToWatchlist      = (data) => api.post('/watchlist', data)
