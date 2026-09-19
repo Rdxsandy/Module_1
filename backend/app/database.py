@@ -18,43 +18,59 @@ DATABASE_URL = os.getenv("DATABASE_URL")
 if not DATABASE_URL:
     raise RuntimeError("DATABASE_URL is not set. Configure your Neon PostgreSQL connection string in .env.")
 
-# asyncpg doesn't understand libpq-only query params (sslmode, channel_binding);
-# translate sslmode into an asyncpg connect arg and drop the rest.
-_url = make_url(DATABASE_URL).set(drivername="postgresql+asyncpg")
-_query = dict(_url.query)
-_sslmode = _query.pop("sslmode", None)
-_query.pop("channel_binding", None)
-_url = _url.set(query=_query)
 
-connect_args = {"ssl": True} if _sslmode and _sslmode.lower() != "disable" else {}
-# IMPORTANT: DATABASE_URL must point at Neon's *direct* endpoint, not the
-# "-pooler" (PgBouncer transaction-pooling) one. This app keeps its own
-# long-lived connection pool (pool_size/max_overflow below), so pooling
-# again via PgBouncer double-pools — and PgBouncer's transaction mode can
-# silently hand a "connection" different physical Postgres backends between
-# statements, which breaks asyncpg's server-side prepared statements
-# (surfaces as asyncpg.exceptions.InvalidCachedStatementError). Serverless/
-# edge callers without a persistent pool should use "-pooler" instead.
-# statement_cache_size=0 is kept as defense-in-depth even on the direct
-# endpoint, in case this ever runs through a pooler again.
-connect_args["statement_cache_size"] = 0
+def build_engine_and_sessionmaker(*, pool_size: int = 20, max_overflow: int = 10):
+    """Build a fresh async engine + sessionmaker against DATABASE_URL.
 
-# Pool sized for concurrent request bursts (e.g. camera fleets pushing events);
-# pre_ping + recycle guard against Neon's pooler silently dropping idle connections.
-engine = create_async_engine(
-    _url,
-    connect_args=connect_args,
-    pool_size=20,
-    max_overflow=10,
-    pool_pre_ping=True,
-    pool_recycle=1800,
-    echo=False,
-)
+    asyncpg connections are bound to the event loop that opened them and
+    must never be shared across loops — every event loop that touches the
+    DB (the main FastAPI loop, or a background worker loop like the camera
+    feed's) needs its OWN engine/pool from this, not the same `engine`
+    object reused across loops.
+    """
+    # asyncpg doesn't understand libpq-only query params (sslmode, channel_binding);
+    # translate sslmode into an asyncpg connect arg and drop the rest.
+    url = make_url(DATABASE_URL).set(drivername="postgresql+asyncpg")
+    query = dict(url.query)
+    sslmode = query.pop("sslmode", None)
+    query.pop("channel_binding", None)
+    url = url.set(query=query)
 
-# expire_on_commit=False: FastAPI route handlers return ORM objects straight to
-# Pydantic (response_model). Without this, attribute access after a commit would
-# trigger an implicit lazy load, which raises under async SQLAlchemy.
-SessionLocal = async_sessionmaker(bind=engine, class_=AsyncSession, expire_on_commit=False, autoflush=False)
+    connect_args = {"ssl": True} if sslmode and sslmode.lower() != "disable" else {}
+    # IMPORTANT: DATABASE_URL must point at Neon's *direct* endpoint, not the
+    # "-pooler" (PgBouncer transaction-pooling) one. This app keeps its own
+    # long-lived connection pool (pool_size/max_overflow below), so pooling
+    # again via PgBouncer double-pools — and PgBouncer's transaction mode can
+    # silently hand a "connection" different physical Postgres backends between
+    # statements, which breaks asyncpg's server-side prepared statements
+    # (surfaces as asyncpg.exceptions.InvalidCachedStatementError). Serverless/
+    # edge callers without a persistent pool should use "-pooler" instead.
+    # statement_cache_size=0 is kept as defense-in-depth even on the direct
+    # endpoint, in case this ever runs through a pooler again.
+    connect_args["statement_cache_size"] = 0
+
+    # Pool sized for concurrent request bursts (e.g. camera fleets pushing events);
+    # pre_ping + recycle guard against Neon's pooler silently dropping idle connections.
+    built_engine = create_async_engine(
+        url,
+        connect_args=connect_args,
+        pool_size=pool_size,
+        max_overflow=max_overflow,
+        pool_pre_ping=True,
+        pool_recycle=1800,
+        echo=False,
+    )
+
+    # expire_on_commit=False: FastAPI route handlers return ORM objects straight to
+    # Pydantic (response_model). Without this, attribute access after a commit would
+    # trigger an implicit lazy load, which raises under async SQLAlchemy.
+    built_sessionmaker = async_sessionmaker(
+        bind=built_engine, class_=AsyncSession, expire_on_commit=False, autoflush=False
+    )
+    return built_engine, built_sessionmaker
+
+
+engine, SessionLocal = build_engine_and_sessionmaker()
 
 Base = declarative_base()
 

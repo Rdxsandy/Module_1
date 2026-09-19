@@ -19,3 +19,22 @@ class WatchlistOut(WatchlistCreate):
     updated_at: datetime
 
     model_config = {"from_attributes": True}
+
+
+class WatchlistLastSeen(BaseModel):
+    camera_id: int
+    camera_name: str
+    latitude: float
+    longitude: float
+    event_time: datetime
+
+
+class WatchlistLocationOut(BaseModel):
+    id: int
+    identifier: str
+    entity_type: str
+    description: Optional[str] = None
+    priority: str
+    last_seen: Optional[WatchlistLastSeen] = None
+
+    model_config = {"from_attributes": True}

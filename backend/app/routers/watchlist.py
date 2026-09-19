@@ -8,10 +8,12 @@ DELETE /api/watchlist/{id}  - ADMIN ONLY
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import joinedload
 
 from app.database import get_db
 from app.models.watchlist import Watchlist
-from app.schemas.watchlist import WatchlistCreate, WatchlistOut
+from app.models.vehicle_event import VehicleEvent
+from app.schemas.watchlist import WatchlistCreate, WatchlistOut, WatchlistLastSeen, WatchlistLocationOut
 from app.services.watchlist_service import normalize_vehicle_number
 from app.auth.dependencies import get_current_user, require_admin
 from app.models.user import User
@@ -28,6 +30,44 @@ async def list_watchlist(
     """List all watchlist entries. Requires login."""
     result = await db.execute(select(Watchlist).order_by(Watchlist.id))
     return result.scalars().all()
+
+
+@router.get("/locations", response_model=list[WatchlistLocationOut])
+async def get_watchlist_locations(
+    db: AsyncSession = Depends(get_db),
+    _: User = Depends(get_current_user),
+):
+    """Last known location (from its most recent detection) of every active
+    watchlist entry, for auto-plotting on the GIS map without searching each
+    plate individually. Entries never detected are returned with last_seen=null."""
+    wl_result = await db.execute(select(Watchlist).filter(Watchlist.active.is_(True)))
+    entries = wl_result.scalars().all()
+
+    items = []
+    for entry in entries:
+        ev_result = await db.execute(
+            select(VehicleEvent)
+            .options(joinedload(VehicleEvent.camera))
+            .filter(VehicleEvent.vehicle_number == entry.identifier)
+            .order_by(VehicleEvent.event_time.desc())
+            .limit(1)
+        )
+        last_event = ev_result.unique().scalar_one_or_none()
+        items.append(WatchlistLocationOut(
+            id=entry.id,
+            identifier=entry.identifier,
+            entity_type=entry.entity_type,
+            description=entry.description,
+            priority=entry.priority,
+            last_seen=WatchlistLastSeen(
+                camera_id=last_event.camera_id,
+                camera_name=last_event.camera.name if last_event.camera else f"Camera-{last_event.camera_id}",
+                latitude=last_event.latitude,
+                longitude=last_event.longitude,
+                event_time=last_event.event_time,
+            ) if last_event else None,
+        ))
+    return items
 
 
 @router.post("", response_model=WatchlistOut, status_code=201)

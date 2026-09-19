@@ -15,6 +15,7 @@ import ProtectedRoute from './components/ProtectedRoute'
 import Login          from './pages/Login'
 import Dashboard      from './pages/Dashboard'
 import Cameras        from './pages/Cameras'
+import Feed           from './pages/Feed'
 import MapPage        from './pages/MapPage'
 import VehicleTracking from './pages/VehicleTracking'
 import Alerts         from './pages/Alerts'
@@ -24,6 +25,7 @@ import Events          from './pages/Events'
 const NAV_LINKS = [
   { to: '/',         label: '🏠 Dashboard'       },
   { to: '/cameras',  label: '📹 Cameras'          },
+  { to: '/feed',     label: '🎥 Feed Monitor'      },
   { to: '/map',      label: '🗺️  GIS Map'          },
   { to: '/tracking', label: '🚗 Vehicle Tracking'  },
   { to: '/alerts',   label: '🚨 Alerts'            },
@@ -113,6 +115,7 @@ function AppLayout() {
         <Routes>
           <Route path="/"         element={<ProtectedRoute><Dashboard /></ProtectedRoute>}       />
           <Route path="/cameras"  element={<ProtectedRoute><Cameras /></ProtectedRoute>}         />
+          <Route path="/feed"     element={<ProtectedRoute><Feed /></ProtectedRoute>}            />
           <Route path="/map"      element={<ProtectedRoute><MapPage /></ProtectedRoute>}         />
           <Route path="/tracking" element={<ProtectedRoute><VehicleTracking /></ProtectedRoute>} />
           <Route path="/alerts"   element={<ProtectedRoute><Alerts /></ProtectedRoute>}          />

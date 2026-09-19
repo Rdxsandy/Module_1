@@ -9,7 +9,8 @@ import { useMap } from 'react-leaflet'
 import MapView from '../components/MapView'
 import CameraMarker from '../components/CameraMarker'
 import VehicleRoute from '../components/VehicleRoute'
-import { getCameras, getVehicleHistory } from '../api/client'
+import WatchlistMarker from '../components/WatchlistMarker'
+import { getCameras, getVehicleHistory, getWatchlistLocations } from '../api/client'
 
 // Fits the viewport to all camera markers so cameras added far outside the
 // default Delhi view (typo'd or otherwise) are still visible on load.
@@ -25,6 +26,7 @@ function FitAllCameras({ cameras }) {
 
 export default function MapPage() {
   const [cameras, setCameras] = useState([])
+  const [watchlistLocations, setWatchlistLocations] = useState([])
   const [route, setRoute] = useState([])
   const [vehicle, setVehicle] = useState('')
   const [input, setInput] = useState('')
@@ -34,9 +36,16 @@ export default function MapPage() {
 
   useEffect(() => {
     getCameras().then(r => setCameras(r.data)).catch(console.error)
+    loadWatchlistLocations()
     const v = searchParams.get('vehicle')
     if (v) { setInput(v); loadRoute(v) }
+    const interval = setInterval(loadWatchlistLocations, 15000)
+    return () => clearInterval(interval)
   }, [])
+
+  const loadWatchlistLocations = () => {
+    getWatchlistLocations().then(r => setWatchlistLocations(r.data)).catch(console.error)
+  }
 
   const loadRoute = async (vn) => {
     setError('')
@@ -80,13 +89,15 @@ export default function MapPage() {
 
       <MapView height="60vh">
         {cameras.map(cam => <CameraMarker key={cam.id} camera={cam} />)}
+        {watchlistLocations.map(entry => <WatchlistMarker key={entry.id} entry={entry} />)}
         {route.length === 0 && <FitAllCameras cameras={cameras} />}
         {route.length > 0 && <VehicleRoute history={route} fitRoute={fitRoute} />}
       </MapView>
 
       <p style={{ fontSize:12, color:'var(--muted)', marginTop:8 }}>
         📹 {cameras.length} cameras shown &nbsp;|&nbsp;
-        🟢 Online &nbsp;🔴 Offline &nbsp;🟡 Maintenance
+        🟢 Online &nbsp;🔴 Offline &nbsp;🟡 Maintenance &nbsp;|&nbsp;
+        🚨 {watchlistLocations.filter(w => w.last_seen).length} watchlist vehicle{watchlistLocations.filter(w => w.last_seen).length === 1 ? '' : 's'} shown
       </p>
     </div>
   )
