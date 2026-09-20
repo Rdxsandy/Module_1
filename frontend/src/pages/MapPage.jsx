@@ -5,7 +5,7 @@
  */
 import React, { useEffect, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
-import { useMap } from 'react-leaflet'
+import { useMap, Circle } from 'react-leaflet'
 import MapView from '../components/MapView'
 import CameraMarker from '../components/CameraMarker'
 import VehicleRoute from '../components/VehicleRoute'
@@ -32,6 +32,7 @@ export default function MapPage() {
   const [input, setInput] = useState('')
   const [fitRoute, setFitRoute] = useState(false)
   const [error, setError] = useState('')
+  const [showCoverage, setShowCoverage] = useState(false)
   const [searchParams] = useSearchParams()
 
   useEffect(() => {
@@ -78,6 +79,12 @@ export default function MapPage() {
         <button style={btn} onClick={() => loadRoute()}>Show Route</button>
         {route.length > 0 && <button style={{ ...btn, background:'#e02424' }} onClick={clearRoute}>Clear Route</button>}
         {route.length > 0 && <button style={{ ...btn, background:'#0e9f6e' }} onClick={() => setFitRoute(true)}>Fit Route</button>}
+        <button
+          style={{ ...btn, background: showCoverage ? '#0e9f6e' : '#64748b' }}
+          onClick={() => setShowCoverage(v => !v)}
+        >
+          {showCoverage ? '🟢 Hide Coverage Layer' : '⚪ Show Coverage Layer'}
+        </button>
       </div>
 
       {error && <p style={{ color:'#e02424', marginBottom:12 }}>{error}</p>}
@@ -88,6 +95,14 @@ export default function MapPage() {
       )}
 
       <MapView height="60vh">
+        {showCoverage && cameras.map(cam => (
+          <Circle
+            key={`coverage-${cam.id}`}
+            center={[cam.latitude, cam.longitude]}
+            radius={cam.coverage_radius_meters || 50}
+            pathOptions={{ color: '#16a34a', fillColor: '#22c55e', fillOpacity: 0.2, weight: 1 }}
+          />
+        ))}
         {cameras.map(cam => <CameraMarker key={cam.id} camera={cam} />)}
         {watchlistLocations.map(entry => <WatchlistMarker key={entry.id} entry={entry} />)}
         {route.length === 0 && <FitAllCameras cameras={cameras} />}

@@ -48,6 +48,7 @@ export const bulkUploadCameras = (file)   => {
   })
 }
 export const downloadTemplateUrl = '/api/cameras/bulk-upload/template'
+export const getCamerasGapAnalysis = () => api.get('/cameras/gap-analysis')
 
 // ---- Events ----
 export const postEvent   = (data)        => api.post('/events', data)

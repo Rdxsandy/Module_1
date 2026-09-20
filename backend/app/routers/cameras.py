@@ -3,6 +3,7 @@ routers/cameras.py - Camera registry endpoints + Bulk Upload.
 """
 import io
 import csv
+from datetime import date, datetime, timezone, timedelta
 from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile, File
 from fastapi.responses import Response
@@ -223,6 +224,71 @@ async def create_camera(
     await db.refresh(camera)
     await log_audit(db, user, "CREATE", "CAMERA", camera.name, payload.model_dump())
     return camera
+
+@router.get("/gap-analysis")
+async def gap_analysis(
+    db: AsyncSession = Depends(get_db),
+    _: User = Depends(get_current_user),
+):
+    """
+    Sample gap-analysis report for Model 1: ageing infrastructure and
+    maintenance backlog across the camera registry.
+
+    - Ageing: installation_date older than 5 years -> "Requires Upgrade"
+    - Maintenance: status OFFLINE, or last_maintenance_date older than
+      1 year (or never recorded) -> "Requires Maintenance"
+    """
+    today = date.today()
+    ageing_cutoff = today - timedelta(days=365 * 5)
+    maintenance_cutoff = today - timedelta(days=365)
+
+    total_result = await db.execute(select(Camera))
+    all_cameras = total_result.scalars().all()
+    total_cameras = len(all_cameras)
+
+    ageing_cameras = [
+        c for c in all_cameras
+        if c.installation_date is not None and c.installation_date < ageing_cutoff
+    ]
+
+    maintenance_cameras = [
+        c for c in all_cameras
+        if c.status == "OFFLINE"
+        or c.last_maintenance_date is None
+        or c.last_maintenance_date < maintenance_cutoff
+    ]
+
+    offline_cameras = [c for c in all_cameras if c.status == "OFFLINE"]
+
+    def _summarize(cam: Camera) -> dict:
+        return {
+            "id": cam.id,
+            "name": cam.name,
+            "department": cam.department,
+            "status": cam.status,
+            "installation_date": cam.installation_date.isoformat() if cam.installation_date else None,
+            "last_maintenance_date": cam.last_maintenance_date.isoformat() if cam.last_maintenance_date else None,
+        }
+
+    def _pct(count: int) -> float:
+        return round((count / total_cameras) * 100, 1) if total_cameras else 0.0
+
+    return {
+        "generated_at": datetime.now(timezone.utc).isoformat(),
+        "total_cameras": total_cameras,
+        "ageing": {
+            "requires_upgrade_count": len(ageing_cameras),
+            "requires_upgrade_pct": _pct(len(ageing_cameras)),
+            "cameras": [_summarize(c) for c in ageing_cameras],
+        },
+        "maintenance": {
+            "requires_maintenance_count": len(maintenance_cameras),
+            "requires_maintenance_pct": _pct(len(maintenance_cameras)),
+            "offline_count": len(offline_cameras),
+            "cameras": [_summarize(c) for c in maintenance_cameras],
+        },
+    }
+
 
 @router.get("/{camera_id}", response_model=CameraOut)
 async def get_camera(

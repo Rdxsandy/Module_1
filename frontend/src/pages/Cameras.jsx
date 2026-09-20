@@ -17,7 +17,10 @@ export default function Cameras() {
   
   // Single Camera Add
   const [showForm, setShowForm] = useState(false)
-  const [form, setForm] = useState({ name:'', department:'Traffic', camera_type:'ANPR', owner:'', latitude:'', longitude:'', status:'ONLINE' })
+  const [form, setForm] = useState({
+    name:'', department:'Traffic', camera_type:'ANPR', owner:'', latitude:'', longitude:'', status:'ONLINE',
+    installation_date:'', last_maintenance_date:'', coverage_radius_meters: 50,
+  })
   const [saving, setSaving] = useState(false)
   
   // Bulk Upload
@@ -63,8 +66,16 @@ export default function Cameras() {
 
     setSaving(true)
     try {
-      await createCamera(form)
-      setForm({ name:'', department:'Traffic', camera_type:'ANPR', owner:'', latitude:'', longitude:'', status:'online' })
+      await createCamera({
+        ...form,
+        installation_date: form.installation_date || null,
+        last_maintenance_date: form.last_maintenance_date || null,
+        coverage_radius_meters: Number(form.coverage_radius_meters) || 50,
+      })
+      setForm({
+        name:'', department:'Traffic', camera_type:'ANPR', owner:'', latitude:'', longitude:'', status:'ONLINE',
+        installation_date:'', last_maintenance_date:'', coverage_radius_meters: 50,
+      })
       setShowForm(false)
       load()
       setModal({ open: true, title: 'Camera Saved', message: `"${trimmedName}" was added to the registry successfully.`, variant: 'success' })
@@ -89,6 +100,28 @@ export default function Cameras() {
     }
   }
 
+  const handleExportCsv = () => {
+    const headers = [
+      'id', 'name', 'department', 'camera_type', 'owner', 'latitude', 'longitude', 'status',
+      'installation_date', 'last_maintenance_date', 'coverage_radius_meters',
+      'vms_type', 'vendor', 'storage_type', 'retention_days', 'description', 'created_at',
+    ]
+    const escape = (val) => {
+      if (val === null || val === undefined) return ''
+      const s = String(val)
+      return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s
+    }
+    const rows = cameras.map(c => headers.map(h => escape(c[h])).join(','))
+    const csv = [headers.join(','), ...rows].join('\n')
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `cameras_export_${new Date().toISOString().slice(0, 10)}.csv`
+    a.click()
+    URL.revokeObjectURL(url)
+  }
+
   const handleBulkUpload = async (e) => {
     e.preventDefault()
     if (!bulkFile) return
@@ -111,16 +144,21 @@ export default function Cameras() {
     <div>
       <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:20 }}>
         <h1 style={h1}>📹 Camera Registry</h1>
-        {isAdmin && (
-          <div style={{ display: 'flex', gap: 10 }}>
-            <button onClick={() => { setShowBulkForm(v => !v); setShowForm(false) }} style={secondaryBtn}>
-              {showBulkForm ? 'Cancel Bulk Upload' : 'Bulk Upload'}
-            </button>
-            <button onClick={() => { setShowForm(v => !v); setShowBulkForm(false) }} style={primaryBtn}>
-              {showForm ? 'Cancel' : '+ Add Camera'}
-            </button>
-          </div>
-        )}
+        <div style={{ display: 'flex', gap: 10 }}>
+          <button onClick={handleExportCsv} disabled={cameras.length === 0} style={secondaryBtn}>
+            ⬇️ Export to CSV
+          </button>
+          {isAdmin && (
+            <>
+              <button onClick={() => { setShowBulkForm(v => !v); setShowForm(false) }} style={secondaryBtn}>
+                {showBulkForm ? 'Cancel Bulk Upload' : 'Bulk Upload'}
+              </button>
+              <button onClick={() => { setShowForm(v => !v); setShowBulkForm(false) }} style={primaryBtn}>
+                {showForm ? 'Cancel' : '+ Add Camera'}
+              </button>
+            </>
+          )}
+        </div>
       </div>
 
       {/* Bulk Upload UI */}
@@ -232,6 +270,9 @@ export default function Cameras() {
             <label style={lbl}>Owner <input style={inp} value={form.owner} onChange={e=>setForm({...form, owner:e.target.value})} /></label>
             <label style={lbl}>Latitude <input required type="number" step="any" style={inp} value={form.latitude} onChange={e=>setForm({...form, latitude:e.target.value})} /></label>
             <label style={lbl}>Longitude <input required type="number" step="any" style={inp} value={form.longitude} onChange={e=>setForm({...form, longitude:e.target.value})} /></label>
+            <label style={lbl}>Installation Date <input type="date" style={inp} value={form.installation_date} onChange={e=>setForm({...form, installation_date:e.target.value})} /></label>
+            <label style={lbl}>Last Maintenance Date <input type="date" style={inp} value={form.last_maintenance_date} onChange={e=>setForm({...form, last_maintenance_date:e.target.value})} /></label>
+            <label style={lbl}>Coverage Radius (m) <input type="number" min="0" step="1" style={inp} value={form.coverage_radius_meters} onChange={e=>setForm({...form, coverage_radius_meters:e.target.value})} /></label>
           </div>
           <button type="submit" disabled={saving} style={primaryBtn}>{saving ? 'Saving...' : 'Save Camera'}</button>
         </form>

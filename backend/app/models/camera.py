@@ -3,7 +3,7 @@ models/camera.py — Camera ORM model.
 Represents a physical CCTV camera onboarded into the central registry.
 """
 from datetime import datetime, timezone
-from sqlalchemy import Column, Integer, String, Float, DateTime
+from sqlalchemy import Column, Integer, String, Float, DateTime, Date
 from app.database import Base
 
 
@@ -24,6 +24,9 @@ class Camera(Base):
     storage_type = Column(String(50), nullable=True)
     retention_days = Column(Integer, nullable=True)
     description = Column(String(500), nullable=True)
+    installation_date = Column(Date, nullable=True)
+    last_maintenance_date = Column(Date, nullable=True)
+    coverage_radius_meters = Column(Integer, nullable=False, default=50)
     created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
     updated_at = Column(
         DateTime(timezone=True),

@@ -1,5 +1,5 @@
 """schemas/camera.py — Pydantic models for Camera endpoints."""
-from datetime import datetime
+from datetime import datetime, date
 from typing import Optional
 from pydantic import BaseModel, Field
 
@@ -18,6 +18,9 @@ class CameraCreate(BaseModel):
     storage_type: Optional[str] = None
     retention_days: Optional[int] = None
     description: Optional[str] = None
+    installation_date: Optional[date] = None
+    last_maintenance_date: Optional[date] = None
+    coverage_radius_meters: int = Field(default=50, ge=0)
 
 
 class CameraOut(CameraCreate):
