@@ -14,7 +14,9 @@ class Alert(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     event_id = Column(Integer, ForeignKey("vehicle_events.id"), nullable=False)
-    watchlist_id = Column(Integer, ForeignKey("watchlist.id"), nullable=False)
+    # Nullable: VAHAN-stolen-vehicle alerts bypass the watchlist entirely and
+    # have no watchlist entry to point at.
+    watchlist_id = Column(Integer, ForeignKey("watchlist.id"), nullable=True)
     vehicle_number = Column(String(50), nullable=False, index=True)
     severity = Column(String(20), nullable=False, default="high")
     message = Column(String(500), nullable=False)

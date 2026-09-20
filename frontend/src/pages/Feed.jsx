@@ -16,8 +16,12 @@ import {
 } from 'react-icons/md'
 import {
   uploadCameraFeed, stopCameraFeed, getCameraFeedStatus,
-  getCameraFeedActivity, getCameraFeedPreviewBlob,
+  getCameraFeedActivity,
 } from '../api/client'
+
+// No Authorization header can be attached to an <img> request, so this is
+// deliberately a public MJPEG endpoint (see routers/camera_feed.py).
+const STREAM_URL = '/api/camera-feed/stream'
 
 const STATUS_LABEL = {
   detected: 'Plate detected',
@@ -30,11 +34,9 @@ const STATUS_LABEL = {
 export default function Feed() {
   const [status, setStatus] = useState({ running: false })
   const [activity, setActivity] = useState([])
-  const [previewUrl, setPreviewUrl] = useState(null)
   const [uploading, setUploading] = useState(false)
   const [error, setError] = useState('')
   const fileInputRef = useRef(null)
-  const previewUrlRef = useRef(null)
 
   const fetchStatus = useCallback(async () => {
     try {
@@ -54,18 +56,6 @@ export default function Feed() {
     }
   }, [])
 
-  const fetchPreview = useCallback(async () => {
-    try {
-      const res = await getCameraFeedPreviewBlob()
-      const url = URL.createObjectURL(res.data)
-      if (previewUrlRef.current) URL.revokeObjectURL(previewUrlRef.current)
-      previewUrlRef.current = url
-      setPreviewUrl(url)
-    } catch {
-      // no frame yet — leave last preview showing
-    }
-  }, [])
-
   useEffect(() => {
     fetchStatus()
     fetchActivity()
@@ -75,17 +65,6 @@ export default function Feed() {
     }, 2000)
     return () => clearInterval(interval)
   }, [fetchStatus, fetchActivity])
-
-  useEffect(() => {
-    if (!status.running && !status.has_preview) return
-    fetchPreview()
-    const interval = setInterval(fetchPreview, 2000)
-    return () => clearInterval(interval)
-  }, [status.running, status.has_preview, fetchPreview])
-
-  useEffect(() => () => {
-    if (previewUrlRef.current) URL.revokeObjectURL(previewUrlRef.current)
-  }, [])
 
   const handleFileSelected = async (e) => {
     const file = e.target.files?.[0]
@@ -169,11 +148,16 @@ export default function Feed() {
             )}
           </h2>
           <div style={styles.previewFrame}>
-            {previewUrl ? (
-              <img src={previewUrl} alt="Latest processed frame" style={styles.previewImg} />
+            {status.running || status.has_preview ? (
+              <img
+                key={status.started_at || 'stream'}
+                src={STREAM_URL}
+                alt="Live CCTV Feed"
+                style={styles.previewImg}
+              />
             ) : (
               <div style={styles.previewEmpty}>
-                {status.running ? 'Waiting for the first frame…' : 'No feed running — upload a video to begin.'}
+                No feed running — upload a video to begin.
               </div>
             )}
           </div>

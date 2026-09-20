@@ -21,6 +21,7 @@ from app.models.vehicle_event import VehicleEvent
 from app.models.alert import Alert
 from app.schemas.event import EventCreate
 from app.services.watchlist_service import match_watchlist, normalize_vehicle_number
+from app.services import vahan_service
 
 
 async def process_event(
@@ -39,8 +40,13 @@ async def process_event(
     if not camera:
         raise ValueError(f"Camera name '{payload.camera_id}' not found")
 
-    # --- 2. Normalise and insert event ---
+    # --- 2. Normalise, cross-reference VAHAN, and insert event ---
     normalised_plate = normalize_vehicle_number(payload.vehicle_number)
+
+    vahan_data = await vahan_service.lookup_vehicle(normalised_plate)
+    attributes = dict(payload.attributes or {})
+    attributes["vahan"] = vahan_data
+
     event = VehicleEvent(
         camera_id=camera.id,
         vehicle_number=normalised_plate,
@@ -50,31 +56,52 @@ async def process_event(
         confidence=payload.confidence,
         event_type=payload.event_type,
         raw_payload=json.dumps(payload.model_dump(mode="json")),
+        snapshot_url=payload.snapshot_url,
+        attributes=attributes,
         created_at=datetime.now(timezone.utc),
     )
     db.add(event)
     await db.flush()  # get event.id before committing
 
-    # --- 3. Watchlist match ---
-    wl_entry = await match_watchlist(db, normalised_plate)
-
-    # --- 4. Create alert if matched ---
     alert: Alert | None = None
-    if wl_entry:
+
+    if vahan_data.get("stolen"):
+        # --- VAHAN stolen-vehicle hit: immediate high-priority alert,
+        # bypassing the standard watchlist check entirely. ---
         alert = Alert(
             event_id=event.id,
-            watchlist_id=wl_entry.id,
+            watchlist_id=None,
             vehicle_number=normalised_plate,
-            severity=wl_entry.priority,
+            severity="CRITICAL",
             message=(
-                f"Watchlist hit: {wl_entry.entity_type} — "
-                f"{wl_entry.description or 'No description'} "
+                f"VAHAN ALERT: vehicle {normalised_plate} is flagged STOLEN "
+                f"(owner: {vahan_data.get('owner') or 'unknown'}) — "
                 f"detected by {camera.name} at {payload.event_time.isoformat()}"
             ),
             status="NEW",
             created_at=datetime.now(timezone.utc),
         )
         db.add(alert)
+    else:
+        # --- 3. Watchlist match ---
+        wl_entry = await match_watchlist(db, normalised_plate)
+
+        # --- 4. Create alert if matched ---
+        if wl_entry:
+            alert = Alert(
+                event_id=event.id,
+                watchlist_id=wl_entry.id,
+                vehicle_number=normalised_plate,
+                severity=wl_entry.priority,
+                message=(
+                    f"Watchlist hit: {wl_entry.entity_type} — "
+                    f"{wl_entry.description or 'No description'} "
+                    f"detected by {camera.name} at {payload.event_time.isoformat()}"
+                ),
+                status="NEW",
+                created_at=datetime.now(timezone.utc),
+            )
+            db.add(alert)
 
     await db.commit()
     await db.refresh(event)

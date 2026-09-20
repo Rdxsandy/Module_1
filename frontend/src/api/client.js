@@ -83,10 +83,6 @@ export const uploadCameraFeed = (file, cameraId) => {
 export const stopCameraFeed = ()      => api.post('/camera-feed/stop')
 export const getCameraFeedStatus = () => api.get('/camera-feed/status')
 export const getCameraFeedActivity = () => api.get('/camera-feed/activity')
-// Auth is Bearer-token only (no cookies), so <img src> can't hit this endpoint
-// directly — fetch as a blob and hand the caller an object URL instead.
-export const getCameraFeedPreviewBlob = () =>
-  api.get('/camera-feed/preview', { responseType: 'blob' })
 
 // ---- Watchlist ----
 export const getWatchlist          = ()     => api.get('/watchlist')

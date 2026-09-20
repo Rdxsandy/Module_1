@@ -14,6 +14,7 @@ video_source accepts anything cv2.VideoCapture understands:
 """
 import os
 import threading
+import uuid
 import cv2
 import requests
 from datetime import datetime, timezone
@@ -26,6 +27,10 @@ from app.event_sources.base import EventSource
 # Loaded here too (not just in app.database) so this module also works when
 # run standalone via test_camera.py, without importing the rest of the app.
 load_dotenv()
+
+SNAPSHOT_DIR = os.path.join(
+    os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "uploads", "snapshots"
+)
 
 
 class RTSPEventSource(EventSource):
@@ -133,6 +138,19 @@ class RTSPEventSource(EventSource):
                         elif plate:
                             print(f"DETECTED PLATE: {plate} (Conf: {confidence})")
 
+                            # 4b. Save the detection frame locally as evidence
+                            # (replaces an S3 upload) — a full disk must not
+                            # crash the capture loop, just skip the snapshot.
+                            snapshot_url = None
+                            try:
+                                os.makedirs(SNAPSHOT_DIR, exist_ok=True)
+                                filename = f"{uuid.uuid4().hex}_{plate}.jpg"
+                                with open(os.path.join(SNAPSHOT_DIR, filename), "wb") as f:
+                                    f.write(image_bytes)
+                                snapshot_url = f"/api/static/snapshots/{filename}"
+                            except OSError as e:
+                                print(f"Failed to save snapshot for plate '{plate}': {e}")
+
                             payload = EventCreate(
                                 camera_id=self.camera_id,
                                 vehicle_number=plate,
@@ -142,7 +160,8 @@ class RTSPEventSource(EventSource):
                                 confidence=confidence,
                                 event_type="ANPR",
                                 attributes={"vehicle_type": "car"},
-                                source={"vendor": "COLAB_AI", "source_id": "RTSP-001"}
+                                source={"vendor": "COLAB_AI", "source_id": "RTSP-001"},
+                                snapshot_url=snapshot_url,
                             )
                             # 5. Send this event into the processing pipeline!
                             self._on_event(payload)

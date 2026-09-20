@@ -6,6 +6,7 @@ A future real RTSP/ANPR adapter will POST the same schema.
 """
 from datetime import datetime, timezone
 from sqlalchemy import Column, Integer, String, Float, DateTime, Text, ForeignKey
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import relationship
 from app.database import Base
 
@@ -23,6 +24,10 @@ class VehicleEvent(Base):
     event_type = Column(String(50), nullable=False, default="ANPR")
     # raw_payload stores the original request body as JSON text (JSONB in PostgreSQL)
     raw_payload = Column(Text, nullable=True)
+    # Local evidence snapshot, e.g. "/api/static/snapshots/<uuid>_<plate>.jpg"
+    snapshot_url = Column(String(255), nullable=True)
+    # Structured enrichment data (e.g. VAHAN lookup result) merged onto the event
+    attributes = Column(JSONB, nullable=True)
     created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
 
     # Relationships

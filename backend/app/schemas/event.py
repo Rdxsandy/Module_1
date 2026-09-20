@@ -1,10 +1,7 @@
 """schemas/event.py — Pydantic models for VehicleEvent endpoints."""
 from datetime import datetime
-from typing import Optional
-from pydantic import BaseModel, Field
-
-
 from typing import Optional, Dict, Any
+from pydantic import BaseModel, Field
 
 class EventCreate(BaseModel):
     camera_id: str = Field(..., examples=["CAM-001"])
@@ -16,6 +13,7 @@ class EventCreate(BaseModel):
     event_type: str = Field(default="ANPR", examples=["ANPR"])
     attributes: Optional[Dict[str, Any]] = None
     source: Optional[Dict[str, Any]] = None
+    snapshot_url: Optional[str] = None
 
 
 class EventAckResponse(BaseModel):
@@ -32,6 +30,8 @@ class EventOut(BaseModel):
     longitude: float
     confidence: Optional[float]
     event_type: str
+    snapshot_url: Optional[str] = None
+    attributes: Optional[Dict[str, Any]] = None
     created_at: datetime
 
     model_config = {"from_attributes": True}

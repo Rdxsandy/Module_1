@@ -13,7 +13,7 @@ from collections import deque
 from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form
-from fastapi.responses import Response
+from fastapi.responses import StreamingResponse
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -251,18 +251,6 @@ def get_camera_feed_status(
     }
 
 
-@router.get("/preview")
-def get_camera_feed_preview(
-    _: User = Depends(get_current_user),
-):
-    """Latest frame the AI pipeline processed, as a JPEG — lets the feed page
-    show a live thumbnail so an operator can visually confirm frames are
-    actually flowing, not just that the upload succeeded."""
-    if not _last_frame_bytes:
-        raise HTTPException(status_code=404, detail="No frame captured yet")
-    return Response(content=_last_frame_bytes, media_type="image/jpeg")
-
-
 @router.get("/activity")
 def get_camera_feed_activity(
     _: User = Depends(get_current_user),
@@ -270,3 +258,27 @@ def get_camera_feed_activity(
     """Recent frame-processing results (detections and misses alike) as a
     live log, newest first."""
     return {"items": list(_activity_log)}
+
+
+async def frame_generator():
+    """Yield the latest processed frame as a multipart/x-mixed-replace part,
+    forever, at ~10 fps. Re-sends the same frame between detections so the
+    stream never stalls even while the pipeline waits on the ANPR service."""
+    while True:
+        if _last_frame_bytes:
+            yield (
+                b'--frame\r\n'
+                b'Content-Type: image/jpeg\r\n\r\n' + _last_frame_bytes + b'\r\n'
+            )
+        await asyncio.sleep(0.1)
+
+
+# No auth dependency: a plain <img> tag can't attach an Authorization header,
+# so this mirrors how browsers consume any other MJPEG camera endpoint. Only
+# the latest already-processed frame is exposed, nothing else in the API.
+@router.get("/stream")
+async def stream_camera_feed():
+    return StreamingResponse(
+        frame_generator(),
+        media_type="multipart/x-mixed-replace; boundary=frame",
+    )

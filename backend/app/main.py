@@ -4,6 +4,7 @@ app/main.py - FastAPI application entry point.
 import os
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 
 import app.models  # noqa: F401 - ensure all models are registered with SQLAlchemy
 
@@ -55,6 +56,14 @@ from app.routers import dashboard, simulator, camera_feed
 app.include_router(dashboard.router)
 app.include_router(simulator.router)
 app.include_router(camera_feed.router)
+
+# ---------------------------------------------------------------------------
+# Local evidence storage — snapshots saved by rtsp_source.py are served
+# straight off disk instead of an S3 bucket.
+# ---------------------------------------------------------------------------
+_UPLOADS_DIR = os.path.join(os.path.dirname(__file__), "..", "uploads")
+os.makedirs(os.path.join(_UPLOADS_DIR, "snapshots"), exist_ok=True)
+app.mount("/api/static", StaticFiles(directory=_UPLOADS_DIR), name="static")
 
 
 # ---------------------------------------------------------------------------

@@ -7,7 +7,7 @@ from pydantic import BaseModel
 class AlertOut(BaseModel):
     id: int
     event_id: int
-    watchlist_id: int
+    watchlist_id: Optional[int]
     vehicle_number: str
     severity: str
     message: str
