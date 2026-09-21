@@ -39,7 +39,10 @@ export const getMeApi    = ()        => api.get('/auth/me')
 // ---- Cameras ----
 export const getCameras   = (params = {}) => api.get('/cameras', { params })
 export const createCamera = (data)        => api.post('/cameras', data)
+export const updateCamera = (id, data)    => api.patch(`/cameras/${id}`, data)
 export const getCamera    = (id)          => api.get(`/cameras/${id}`)
+export const getCameraSnapshot = (id)     => api.get(`/cameras/${id}/snapshot`, { responseType: 'blob', timeout: 8000 })
+export const getVmsConfig = ()            => api.get('/cameras/vms-config')
 export const bulkUploadCameras = (file)   => {
   const formData = new FormData()
   formData.append('file', file)
@@ -78,9 +81,11 @@ export const uploadCameraFeed = (file, cameraId) => {
   formData.append('file', file)
   formData.append('camera_id', cameraId)
   return api.post('/camera-feed/upload', formData, {
-    headers: { 'Content-Type': 'multipart/form-data' }
+    headers: { 'Content-Type': 'multipart/form-data' },
+    timeout: 120000, // large video files can take a while to upload
   })
 }
+export const analyzeCameraFeed = (cameraId) => api.post('/camera-feed/analyze', { camera_id: cameraId })
 export const stopCameraFeed = ()      => api.post('/camera-feed/stop')
 export const getCameraFeedStatus = () => api.get('/camera-feed/status')
 export const getCameraFeedActivity = () => api.get('/camera-feed/activity')

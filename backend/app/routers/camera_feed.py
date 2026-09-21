@@ -1,11 +1,22 @@
 """
 routers/camera_feed.py
 
-Lets an operator upload a video file from the dashboard and run it through
-the RTSPEventSource -> Colab ANPR pipeline, exactly like a real camera feed.
+On-demand "active camera" AI pipeline: an operator either uploads a video
+file, or points the AI at one registered camera's live RTSP stream, and it
+runs through the RTSPEventSource -> local YOLO/EasyOCR ANPR pipeline.
 Mirrors the threading / async-bridge pattern used by routers/simulator.py.
+
+Only ONE feed (upload or live) ever runs at a time, by design — this is an
+"AI magnifying glass" you point at whichever camera needs attention, not a
+system that runs inference on every camera simultaneously. Running 30
+YOLO+EasyOCR instances at once would exhaust a modest laptop's RAM/CPU long
+before it exhausted the database connection pool; a VMS like Sentinel
+already does the job of recording all 30 feeds continuously. Switching the
+active camera safely stops the old pipeline (joins its threads, frees its
+models) before starting the new one — see _stop_active_feed().
 """
 import asyncio
+import gc
 import os
 import threading
 import uuid
@@ -14,6 +25,7 @@ from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form
 from fastapi.responses import StreamingResponse
+from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -23,6 +35,7 @@ from app.models.user import User
 from app.models.camera import Camera
 from app.event_sources.rtsp_source import RTSPEventSource
 from app.services.event_service import process_event
+from app.services.vms_service import resolve_stream_url
 from app.schemas.event import EventCreate
 
 router = APIRouter(prefix="/api/camera-feed", tags=["camera-feed"])
@@ -30,11 +43,22 @@ router = APIRouter(prefix="/api/camera-feed", tags=["camera-feed"])
 UPLOAD_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "uploads", "videos")
 ALLOWED_EXTENSIONS = {".mp4", ".avi", ".mov", ".mkv", ".webm"}
 
-# Global state for the single active video-feed source (PoC: one feed at a time)
+
+class AnalyzeCameraRequest(BaseModel):
+    camera_id: str
+
+
+# Global state for the single active video-feed source (by design: one
+# feed at a time — see module docstring).
 _feed_source: RTSPEventSource | None = None
+_feed_thread: threading.Thread | None = None
 is_running = False
 _current_camera_id: str | None = None
-_current_filename: str | None = None
+_current_filename: str | None = None  # None while running == a live camera, not an upload
+# Covers the window between "start accepted" and "_feed_source constructed"
+# (model loading takes several seconds) — lets Stop clicked during that
+# window still take effect instead of being silently swallowed.
+_stop_requested = False
 
 # Live-monitoring state — lets the frontend confirm frames are actually
 # flowing through the AI pipeline (not just that the upload succeeded).
@@ -75,6 +99,18 @@ def _on_feed_frame(frame_bytes: bytes | None, info: dict):
         return
     if status == "ended":
         return
+    if status == "reconnecting":
+        # Not a processed frame — a live (RTSP/webcam) source dropped and
+        # is retrying. Surface it in the activity log without touching
+        # frame/detection counters or the last-known-good preview frame.
+        _activity_log.appendleft({
+            "time": now.isoformat(),
+            "status": status,
+            "plate": None,
+            "confidence": None,
+            "message": info.get("message"),
+        })
+        return
 
     _frames_processed += 1
     _last_frame_at = now
@@ -83,6 +119,12 @@ def _on_feed_frame(frame_bytes: bytes | None, info: dict):
         _last_frame_bytes = frame_bytes
     if status == "detected":
         _plates_detected += 1
+
+    # "streaming" fires on every AI-skipped frame (frame_skip throttling)
+    # purely to keep the live preview flowing — logging each one would
+    # flood the 30-entry activity log and bury real detections.
+    if status == "streaming":
+        return
 
     _activity_log.appendleft({
         "time": now.isoformat(),
@@ -159,12 +201,47 @@ def _on_feed_event(payload: EventCreate):
     future.result()
 
 
-def _run(source: RTSPEventSource):
-    global is_running
+def _run(camera_id: str, video_source: str):
+    """Runs entirely off the request thread: constructing RTSPEventSource
+    loads the YOLO + EasyOCR models (multi-second, first-run can also
+    download weights), which would otherwise block the FastAPI event loop
+    and blow past the frontend's request timeout."""
+    global is_running, _feed_source
     try:
+        source = RTSPEventSource(
+            on_event=_on_feed_event,
+            camera_id=camera_id,
+            video_source=video_source,
+            on_frame=_on_feed_frame,
+        )
+        _feed_source = source
+        if _stop_requested:
+            source.stop()
         source.start()
+    except Exception as e:
+        _on_feed_frame(None, {"status": "source_error", "message": str(e)})
     finally:
         is_running = False
+
+
+def _stop_active_feed(timeout: float = 5.0) -> None:
+    """Safely tear down whatever feed is currently running. Required before
+    starting a new one: two overlapping YOLO+EasyOCR instances (old feed
+    still shutting down, new one already loading models) is exactly what
+    exhausts RAM on a modest box. Joins the old feed's thread — which in
+    turn joins its own reader/exporter threads — before returning, then
+    forces a GC pass so the freed model memory is actually reclaimed
+    before the next feed loads its own copy."""
+    global is_running, _feed_source, _feed_thread, _stop_requested
+    _stop_requested = True
+    if _feed_source:
+        _feed_source.stop()
+    if _feed_thread and _feed_thread.is_alive():
+        _feed_thread.join(timeout=timeout)
+    is_running = False
+    _feed_source = None
+    _feed_thread = None
+    gc.collect()
 
 
 @router.post("/upload")
@@ -174,11 +251,10 @@ async def upload_camera_feed(
     db: AsyncSession = Depends(get_db),
     user: User = Depends(require_admin),
 ):
-    """Upload a video file and start streaming its frames to the ANPR pipeline. ADMIN only."""
-    global _feed_source, is_running, _current_camera_id, _current_filename
-
-    if is_running:
-        raise HTTPException(status_code=400, detail="A video feed is already running — stop it first")
+    """Upload a video file and start streaming its frames to the ANPR
+    pipeline. Switching from whatever feed (if any) was previously active
+    happens automatically — see _stop_active_feed(). ADMIN only."""
+    global _feed_source, _feed_thread, is_running, _current_camera_id, _current_filename, _stop_requested
 
     ext = os.path.splitext(file.filename or "")[1].lower()
     if ext not in ALLOWED_EXTENSIONS:
@@ -199,24 +275,66 @@ async def upload_camera_feed(
     with open(saved_path, "wb") as f:
         f.write(contents)
 
+    # Validation and file-save happen before this, so a bad request never
+    # tears down a perfectly good running feed.
+    _stop_active_feed()
+
     _reset_feed_stats()
-    _feed_source = RTSPEventSource(
-        on_event=_on_feed_event,
-        camera_id=camera_id,
-        video_source=saved_path,
-        on_frame=_on_feed_frame,
-    )
+    _stop_requested = False
     is_running = True
     _current_camera_id = camera_id
     _current_filename = file.filename
 
-    thread = threading.Thread(target=_run, args=(_feed_source,), daemon=True)
-    thread.start()
+    _feed_thread = threading.Thread(target=_run, args=(camera_id, saved_path), daemon=True)
+    _feed_thread.start()
 
     return {
         "status": "started",
         "camera_id": camera_id,
         "filename": file.filename,
+        "mode": "file",
+    }
+
+
+@router.post("/analyze")
+async def analyze_camera_feed(
+    payload: AnalyzeCameraRequest,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(require_admin),
+):
+    """Point the AI pipeline at one registered camera's live stream — either
+    its own manual stream_url, or a channel on the shared VMS (see
+    app/services/vms_service.py). This is the "AI magnifying glass"
+    endpoint: only one camera is ever actively analyzed at a time,
+    switching safely stops whatever was running before. ADMIN only."""
+    global _feed_source, _feed_thread, is_running, _current_camera_id, _current_filename, _stop_requested
+
+    result = await db.execute(select(Camera).filter(Camera.name == payload.camera_id))
+    camera = result.scalar_one_or_none()
+    if not camera:
+        raise HTTPException(status_code=400, detail=f"Camera '{payload.camera_id}' is not registered")
+    stream_url = resolve_stream_url(camera)
+    if not stream_url:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Camera '{payload.camera_id}' has no stream configured — set a stream URL or VMS channel from the Cameras page",
+        )
+
+    _stop_active_feed()
+
+    _reset_feed_stats()
+    _stop_requested = False
+    is_running = True
+    _current_camera_id = camera.name
+    _current_filename = None  # None while running == a live camera, not an upload
+
+    _feed_thread = threading.Thread(target=_run, args=(camera.name, stream_url), daemon=True)
+    _feed_thread.start()
+
+    return {
+        "status": "started",
+        "camera_id": camera.name,
+        "mode": "live",
     }
 
 
@@ -224,10 +342,8 @@ async def upload_camera_feed(
 def stop_camera_feed(
     user: User = Depends(require_admin),
 ):
-    global is_running, _feed_source, _current_camera_id, _current_filename
-    if _feed_source:
-        _feed_source.stop()
-    is_running = False
+    global _current_camera_id, _current_filename
+    _stop_active_feed()
     _current_camera_id = None
     _current_filename = None
     return {"status": "stopped"}
@@ -237,10 +353,14 @@ def stop_camera_feed(
 def get_camera_feed_status(
     _: User = Depends(get_current_user),
 ):
+    mode = None
+    if is_running:
+        mode = "live" if _current_filename is None else "file"
     return {
         "running": is_running,
         "camera_id": _current_camera_id,
         "filename": _current_filename,
+        "mode": mode,
         "started_at": _started_at.isoformat() if _started_at else None,
         "frames_processed": _frames_processed,
         "plates_detected": _plates_detected,

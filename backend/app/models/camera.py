@@ -18,7 +18,13 @@ class Camera(Base):
     latitude = Column(Float, nullable=False)
     longitude = Column(Float, nullable=False)
     status = Column(String(20), nullable=False, default="ONLINE", index=True)
+    # Manual stream URL — used as-is (may embed its own rtsp://user:pass@...
+    # credentials for a standalone camera). For a shared multi-channel VMS
+    # (e.g. Sentinel), prefer vms_channel instead: it never stores
+    # credentials per-camera, resolving the real URL from VMS_* env vars at
+    # connection time (see app/services/vms_service.py).
     stream_url = Column(String(500), nullable=True)
+    vms_channel = Column(Integer, nullable=True)
     vms_type = Column(String(50), nullable=True)
     vendor = Column(String(50), nullable=True)
     storage_type = Column(String(50), nullable=True)

@@ -1,11 +1,15 @@
 import React, { useEffect, useState, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { getCameras, createCamera, bulkUploadCameras, downloadTemplateUrl } from '../api/client'
+import { getCameras, createCamera, updateCamera, getVmsConfig, bulkUploadCameras, downloadTemplateUrl } from '../api/client'
 import { useAuth } from '../context/AuthContext'
 import Modal from '../components/Modal'
 
 const STATUS_OPTS = ['', 'ONLINE', 'OFFLINE', 'MAINTENANCE']
 const TYPE_OPTS   = ['', 'ANPR', 'Fixed', 'PTZ', 'Dome']
+const EMPTY_FORM = {
+  name:'', department:'Traffic', camera_type:'ANPR', owner:'', latitude:'', longitude:'', status:'ONLINE',
+  stream_url:'', vms_channel:'', installation_date:'', last_maintenance_date:'', coverage_radius_meters: 50,
+}
 
 export default function Cameras() {
   const [cameras, setCameras] = useState([])
@@ -14,14 +18,18 @@ export default function Cameras() {
   const [dept, setDept]       = useState('')
   const [status, setStatus]   = useState('')
   const [type, setType]       = useState('')
-  
-  // Single Camera Add
+
+  // Single Camera Add / Edit — editingId is null while adding a new camera,
+  // or an existing camera's id while editing one.
   const [showForm, setShowForm] = useState(false)
-  const [form, setForm] = useState({
-    name:'', department:'Traffic', camera_type:'ANPR', owner:'', latitude:'', longitude:'', status:'ONLINE',
-    installation_date:'', last_maintenance_date:'', coverage_radius_meters: 50,
-  })
+  const [editingId, setEditingId] = useState(null)
+  const [form, setForm] = useState(EMPTY_FORM)
   const [saving, setSaving] = useState(false)
+
+  // Shared VMS config (backend/.env's VMS_* vars) — lets the form offer a
+  // "VMS Channel" picker instead of a manual stream_url when configured.
+  const [vmsConfig, setVmsConfig] = useState({ configured: false, channel_count: 30 })
+  useEffect(() => { getVmsConfig().then(res => setVmsConfig(res.data)).catch(() => {}) }, [])
   
   // Bulk Upload
   const [showBulkForm, setShowBulkForm] = useState(false)
@@ -49,11 +57,32 @@ export default function Cameras() {
 
   useEffect(() => { load() }, [search, dept, status, type])
 
+  const openAddForm = () => {
+    setEditingId(null)
+    setForm(EMPTY_FORM)
+    setShowForm(true)
+    setShowBulkForm(false)
+  }
+
+  const openEditForm = (camera) => {
+    setEditingId(camera.id)
+    setForm({
+      name: camera.name, department: camera.department, camera_type: camera.camera_type,
+      owner: camera.owner || '', latitude: camera.latitude, longitude: camera.longitude,
+      status: camera.status, stream_url: camera.stream_url || '',
+      vms_channel: camera.vms_channel ?? '',
+      installation_date: camera.installation_date || '', last_maintenance_date: camera.last_maintenance_date || '',
+      coverage_radius_meters: camera.coverage_radius_meters ?? 50,
+    })
+    setShowForm(true)
+    setShowBulkForm(false)
+  }
+
   const handleSave = async (e) => {
     e.preventDefault()
 
     const trimmedName = form.name.trim()
-    const duplicate = cameras.find(c => c.name.toLowerCase() === trimmedName.toLowerCase())
+    const duplicate = cameras.find(c => c.id !== editingId && c.name.toLowerCase() === trimmedName.toLowerCase())
     if (duplicate) {
       setModal({
         open: true,
@@ -64,21 +93,31 @@ export default function Cameras() {
       return
     }
 
+    const payload = {
+      ...form,
+      name: trimmedName,
+      stream_url: form.stream_url || null,
+      vms_channel: form.vms_channel === '' ? null : Number(form.vms_channel),
+      installation_date: form.installation_date || null,
+      last_maintenance_date: form.last_maintenance_date || null,
+      coverage_radius_meters: Number(form.coverage_radius_meters) || 50,
+    }
+
     setSaving(true)
     try {
-      await createCamera({
-        ...form,
-        installation_date: form.installation_date || null,
-        last_maintenance_date: form.last_maintenance_date || null,
-        coverage_radius_meters: Number(form.coverage_radius_meters) || 50,
-      })
-      setForm({
-        name:'', department:'Traffic', camera_type:'ANPR', owner:'', latitude:'', longitude:'', status:'ONLINE',
-        installation_date:'', last_maintenance_date:'', coverage_radius_meters: 50,
-      })
+      if (editingId) {
+        await updateCamera(editingId, payload)
+      } else {
+        await createCamera(payload)
+      }
+      setForm(EMPTY_FORM)
+      setEditingId(null)
       setShowForm(false)
       load()
-      setModal({ open: true, title: 'Camera Saved', message: `"${trimmedName}" was added to the registry successfully.`, variant: 'success' })
+      setModal({
+        open: true, title: 'Camera Saved', variant: 'success',
+        message: `"${trimmedName}" was ${editingId ? 'updated' : 'added to the registry'} successfully.`,
+      })
     } catch (err) {
       const detail = err.response?.data?.detail
       if (err.response?.status === 409) {
@@ -93,7 +132,7 @@ export default function Cameras() {
         const msgs = detail.map(d => `${d.loc?.slice(1).join('.')||'field'}: ${d.msg}`).join('\n')
         setModal({ open: true, title: 'Validation Error', message: msgs, variant: 'error' })
       } else {
-        setModal({ open: true, title: 'Failed to Create Camera', message: detail || 'Please try again.', variant: 'error' })
+        setModal({ open: true, title: editingId ? 'Failed to Update Camera' : 'Failed to Create Camera', message: detail || 'Please try again.', variant: 'error' })
       }
     } finally {
       setSaving(false)
@@ -150,10 +189,15 @@ export default function Cameras() {
           </button>
           {isAdmin && (
             <>
-              <button onClick={() => { setShowBulkForm(v => !v); setShowForm(false) }} style={secondaryBtn}>
+              <button onClick={() => { setShowBulkForm(v => !v); setShowForm(false); setEditingId(null) }} style={secondaryBtn}>
                 {showBulkForm ? 'Cancel Bulk Upload' : 'Bulk Upload'}
               </button>
-              <button onClick={() => { setShowForm(v => !v); setShowBulkForm(false) }} style={primaryBtn}>
+              <button
+                onClick={() => {
+                  if (showForm) { setShowForm(false); setEditingId(null) } else { openAddForm() }
+                }}
+                style={primaryBtn}
+              >
                 {showForm ? 'Cancel' : '+ Add Camera'}
               </button>
             </>
@@ -249,13 +293,16 @@ export default function Cameras() {
         </div>
       )}
 
-      {/* Add Camera Form */}
+      {/* Add / Edit Camera Form */}
       {showForm && isAdmin && (
         <form onSubmit={handleSave} style={formCard}>
+          <h2 style={{ marginTop:0, marginBottom:16, fontSize:18, color:'#1e293b' }}>
+            {editingId ? `Edit Camera — ${form.name}` : 'Add New Camera'}
+          </h2>
           <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:16, marginBottom:16 }}>
             <label style={lbl}>Name <input required style={inp} value={form.name} onChange={e=>setForm({...form, name:e.target.value})} /></label>
             <label style={lbl}>Department <input required style={inp} value={form.department} onChange={e=>setForm({...form, department:e.target.value})} /></label>
-            <label style={lbl}>Type 
+            <label style={lbl}>Type
               <select required style={inp} value={form.camera_type} onChange={e=>setForm({...form, camera_type:e.target.value})}>
                 <option>ANPR</option><option>Fixed</option><option>PTZ</option><option>Dome</option>
               </select>
@@ -268,13 +315,36 @@ export default function Cameras() {
               </select>
             </label>
             <label style={lbl}>Owner <input style={inp} value={form.owner} onChange={e=>setForm({...form, owner:e.target.value})} /></label>
+            {vmsConfig.configured && (
+              <label style={lbl}>VMS Channel
+                <select
+                  style={inp} value={form.vms_channel}
+                  onChange={e=>setForm({...form, vms_channel:e.target.value, stream_url: e.target.value ? '' : form.stream_url})}
+                >
+                  <option value="">— Not on shared VMS —</option>
+                  {Array.from({ length: vmsConfig.channel_count }, (_, i) => i + 1).map(n => (
+                    <option key={n} value={n}>Channel {n}</option>
+                  ))}
+                </select>
+              </label>
+            )}
+            <label style={lbl}>
+              {vmsConfig.configured ? 'Stream URL (only if not using a VMS channel above)' : 'Stream URL (RTSP)'}
+              <input
+                style={inp} placeholder="rtsp://user:pass@host:port/path"
+                value={form.stream_url} disabled={!!form.vms_channel}
+                onChange={e=>setForm({...form, stream_url:e.target.value})}
+              />
+            </label>
             <label style={lbl}>Latitude <input required type="number" step="any" style={inp} value={form.latitude} onChange={e=>setForm({...form, latitude:e.target.value})} /></label>
             <label style={lbl}>Longitude <input required type="number" step="any" style={inp} value={form.longitude} onChange={e=>setForm({...form, longitude:e.target.value})} /></label>
             <label style={lbl}>Installation Date <input type="date" style={inp} value={form.installation_date} onChange={e=>setForm({...form, installation_date:e.target.value})} /></label>
             <label style={lbl}>Last Maintenance Date <input type="date" style={inp} value={form.last_maintenance_date} onChange={e=>setForm({...form, last_maintenance_date:e.target.value})} /></label>
             <label style={lbl}>Coverage Radius (m) <input type="number" min="0" step="1" style={inp} value={form.coverage_radius_meters} onChange={e=>setForm({...form, coverage_radius_meters:e.target.value})} /></label>
           </div>
-          <button type="submit" disabled={saving} style={primaryBtn}>{saving ? 'Saving...' : 'Save Camera'}</button>
+          <button type="submit" disabled={saving} style={primaryBtn}>
+            {saving ? 'Saving...' : editingId ? 'Update Camera' : 'Save Camera'}
+          </button>
         </form>
       )}
 
@@ -300,12 +370,14 @@ export default function Cameras() {
               <th style={th}>Type</th>
               <th style={th}>Department</th>
               <th style={th}>Status</th>
+              <th style={th}>Stream URL</th>
               <th style={th}>Added</th>
+              {isAdmin && <th style={th}>Actions</th>}
             </tr>
           </thead>
           <tbody>
-            {loading ? <tr><td colSpan="6" style={{padding:20, textAlign:'center'}}>Loading...</td></tr> : 
-             cameras.length === 0 ? <tr><td colSpan="6" style={{padding:20, textAlign:'center', color:'#666'}}>No cameras found</td></tr> :
+            {loading ? <tr><td colSpan="8" style={{padding:20, textAlign:'center'}}>Loading...</td></tr> :
+             cameras.length === 0 ? <tr><td colSpan="8" style={{padding:20, textAlign:'center', color:'#666'}}>No cameras found</td></tr> :
              cameras.map(c => (
               <tr key={c.id} style={trBody}>
                 <td style={td}>{c.id}</td>
@@ -317,7 +389,26 @@ export default function Cameras() {
                     {c.status}
                   </span>
                 </td>
+                <td
+                  style={{
+                    ...td, fontSize: 13, fontFamily: c.stream_url ? 'monospace' : 'inherit',
+                    color: c.has_stream ? '#334155' : '#94a3b8',
+                    maxWidth: 220, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                  }}
+                  title={c.vms_channel ? `VMS channel ${c.vms_channel}` : c.stream_url || ''}
+                >
+                  {c.vms_channel
+                    ? `VMS channel ${c.vms_channel}`
+                    : c.stream_url || (c.has_stream ? 'Configured (hidden)' : 'Not configured')}
+                </td>
                 <td style={td}>{new Date(c.created_at).toLocaleDateString()}</td>
+                {isAdmin && (
+                  <td style={td}>
+                    <button onClick={() => openEditForm(c)} style={{...secondaryBtn, padding: '4px 12px', fontSize: 13}}>
+                      Edit
+                    </button>
+                  </td>
+                )}
               </tr>
             ))}
           </tbody>

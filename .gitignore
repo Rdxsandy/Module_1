@@ -49,3 +49,9 @@ CCTV_Complete_Solution_AI_Agent_Specification31.pdf
 
 # Uploaded camera feed videos
 backend/uploads/
+
+# YOLOv8 weights — auto-downloaded on first RTSPEventSource instantiation,
+# and auto-exported to .onnx alongside it (see ANPR_USE_ONNX)
+backend/yolov8n.pt
+*.pt
+*.onnx

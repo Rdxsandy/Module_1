@@ -13,3 +13,19 @@ alembic==1.13.1
 celery==5.4.0
 opencv-python==5.0.0.93
 requests==2.34.2
+
+# Local AI pipeline (YOLOv8 detection + EasyOCR plate reading) — replaces
+# the Google Colab HTTP-based ANPR service. CPU wheels are fine for the PoC;
+# torch/ultralytics use CUDA automatically if a GPU is present.
+torch==2.3.1
+torchvision==0.18.1
+ultralytics==8.2.103
+easyocr==1.7.1
+
+# ONNX Runtime — YOLOv8 is auto-exported to .onnx and run through this on
+# CPU-only boxes (see RTSPEventSource._load_yolo_model), noticeably faster
+# than plain PyTorch on CPU. Pinned below 1.19 / onnx below 1.17 to stay on
+# numpy<2, which ultralytics 8.2.x requires.
+onnx==1.16.1
+onnxruntime==1.18.1
+numpy==1.26.4

@@ -1,11 +1,12 @@
 /**
  * pages/Feed.jsx
- * Live monitor for the uploaded video → ANPR pipeline. Lets an operator
- * confirm the AI model is actually receiving and processing frames after
- * a video is uploaded from the Dashboard — not just that the upload call
- * succeeded.
+ * The "AI magnifying glass": point the ANPR pipeline at one uploaded video
+ * or one registered camera's live stream (picked here, or arriving via
+ * ?camera=<name> from the Live Cameras grid) and watch frames/detections
+ * come through in real time.
  */
 import React, { useEffect, useRef, useState, useCallback } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import {
   MdOutlineVideocam,
   MdUpload,
@@ -15,8 +16,8 @@ import {
   MdRadioButtonChecked,
 } from 'react-icons/md'
 import {
-  uploadCameraFeed, stopCameraFeed, getCameraFeedStatus,
-  getCameraFeedActivity,
+  uploadCameraFeed, analyzeCameraFeed, stopCameraFeed, getCameraFeedStatus,
+  getCameraFeedActivity, getCameras,
 } from '../api/client'
 
 // No Authorization header can be attached to an <img> request, so this is
@@ -35,8 +36,32 @@ export default function Feed() {
   const [status, setStatus] = useState({ running: false })
   const [activity, setActivity] = useState([])
   const [uploading, setUploading] = useState(false)
+  const [analyzing, setAnalyzing] = useState(false)
   const [error, setError] = useState('')
+  const [cameras, setCameras] = useState([])
+  const [selectedCamera, setSelectedCamera] = useState('')
   const fileInputRef = useRef(null)
+  const [searchParams] = useSearchParams()
+
+  // Only cameras with a usable stream (manual stream_url or a VMS channel)
+  // can be "pointed at" — see routers/camera_feed.py's /analyze endpoint.
+  const liveCameras = cameras.filter((c) => c.has_stream)
+
+  useEffect(() => {
+    getCameras().then((res) => {
+      setCameras(res.data)
+      const withStream = res.data.filter((c) => c.has_stream)
+      // Arriving from the Live Cameras grid ("Analyze" on a specific card)
+      // pre-selects that camera; otherwise default to the first live one.
+      const requested = searchParams.get('camera')
+      const match = requested && withStream.find((c) => c.name === requested)
+      if (match) setSelectedCamera(match.name)
+      else if (withStream.length > 0) setSelectedCamera(withStream[0].name)
+    }).catch(() => {
+      // ignore — camera picker just stays empty
+    })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   const fetchStatus = useCallback(async () => {
     try {
@@ -83,6 +108,20 @@ export default function Feed() {
     }
   }
 
+  const handleAnalyze = async () => {
+    if (!selectedCamera) return
+    setAnalyzing(true)
+    setError('')
+    try {
+      await analyzeCameraFeed(selectedCamera)
+      await fetchStatus()
+    } catch (e) {
+      setError(e.response?.data?.detail || 'Failed to start video feed.')
+    } finally {
+      setAnalyzing(false)
+    }
+  }
+
   const handleStop = async () => {
     setError('')
     try {
@@ -104,7 +143,7 @@ export default function Feed() {
           </div>
           <div>
             <h1 style={styles.title}>Feed Monitor</h1>
-            <p style={styles.subtitle}>Watch the uploaded video stream into the AI pipeline in real time</p>
+            <p style={styles.subtitle}>Watch an uploaded video or a live camera stream into the AI pipeline in real time</p>
           </div>
         </div>
         <div style={{ display: 'flex', gap: 10 }}>
@@ -120,13 +159,36 @@ export default function Feed() {
               <MdStop size={18} /> Stop Feed
             </button>
           ) : (
-            <button
-              style={{ ...styles.actionBtn, ...styles.uploadBtn, opacity: uploading ? 0.7 : 1 }}
-              onClick={() => fileInputRef.current?.click()}
-              disabled={uploading}
-            >
-              <MdUpload size={18} /> {uploading ? 'Uploading…' : 'Upload Video Feed'}
-            </button>
+            <>
+              {liveCameras.length > 0 && (
+                <>
+                  <select
+                    style={styles.cameraSelect}
+                    value={selectedCamera}
+                    onChange={(e) => setSelectedCamera(e.target.value)}
+                    disabled={analyzing || uploading}
+                  >
+                    {liveCameras.map((c) => (
+                      <option key={c.id} value={c.name}>{c.name}</option>
+                    ))}
+                  </select>
+                  <button
+                    style={{ ...styles.actionBtn, ...styles.analyzeBtn, opacity: analyzing ? 0.7 : 1 }}
+                    onClick={handleAnalyze}
+                    disabled={analyzing || uploading}
+                  >
+                    <MdRadioButtonChecked size={18} /> {analyzing ? 'Starting…' : 'Analyze Feed'}
+                  </button>
+                </>
+              )}
+              <button
+                style={{ ...styles.actionBtn, ...styles.uploadBtn, opacity: uploading ? 0.7 : 1 }}
+                onClick={() => fileInputRef.current?.click()}
+                disabled={uploading || analyzing}
+              >
+                <MdUpload size={18} /> {uploading ? 'Uploading…' : 'Upload Video Feed'}
+              </button>
+            </>
           )}
         </div>
       </div>
@@ -168,6 +230,7 @@ export default function Feed() {
           <h2 style={styles.cardTitle}>Pipeline Status</h2>
           <StatRow label="Status" value={status.running ? 'Running' : 'Stopped'} highlight={status.running} />
           <StatRow label="Camera" value={status.camera_id || '—'} />
+          <StatRow label="Source" value={status.mode === 'live' ? 'Live camera' : status.mode === 'file' ? 'Uploaded file' : '—'} />
           <StatRow label="File" value={status.filename || '—'} />
           <StatRow label="Uptime" value={uptime || '—'} />
           <StatRow label="Frames processed" value={status.frames_processed ?? 0} />
@@ -274,6 +337,11 @@ const styles = {
     fontSize: 14, fontWeight: 600, cursor: 'pointer', color: '#fff',
   },
   uploadBtn: { background: '#3b82f6' },
+  analyzeBtn: { background: '#16a34a' },
+  cameraSelect: {
+    padding: '9px 12px', borderRadius: 8, border: '1px solid #cbd5e1',
+    fontSize: 14, color: '#1e293b', background: '#fff', maxWidth: 200,
+  },
   stopBtn: { background: '#ef4444' },
 
   errorBox: {
